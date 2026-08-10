@@ -7,6 +7,9 @@ export type User = {
   name: string;
   email: string;
   role: Role;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Customer = {
@@ -40,8 +43,11 @@ export type Challan = {
   challanNumber: string;
   customer: Customer;
   totalQuantity: number;
+  totalAmount?: string | number;
+  notes?: string | null;
   status: "DRAFT" | "CONFIRMED" | "CANCELLED";
   createdAt: string;
+  confirmedAt?: string | null;
   items: Array<{
     id: string;
     productName: string;
@@ -51,6 +57,16 @@ export type Challan = {
     location: string;
     quantity: number;
   }>;
+};
+
+export type DashboardStats = {
+  customers: { total: number; active: number; leads: number; inactive: number };
+  products: { total: number; lowStock: number };
+  challans: { total: number; draft: number; confirmed: number; cancelled: number };
+  revenue: { confirmedTotal: string | number };
+  recentChallans: Challan[];
+  lowStockList: Product[];
+  upcomingFollowUps: Customer[];
 };
 
 export const api = axios.create({
