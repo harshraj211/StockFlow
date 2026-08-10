@@ -614,6 +614,10 @@ kbd {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.dashboard-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -681,6 +685,131 @@ kbd {
 
 .compact-list {
   max-height: 360px;
+}
+
+.action-card {
+  align-items: start;
+  background: #fff;
+  border: 1px solid #dfe5ee;
+  border-radius: 8px;
+  color: #172033;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  padding: 16px;
+  text-align: left;
+}
+
+.action-card:hover {
+  background: #f8fbff;
+  border-color: #bfd3f6;
+}
+
+.action-card-icon {
+  align-items: center;
+  background: #eef4ff;
+  border-radius: 8px;
+  color: #175cd3;
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.action-card strong,
+.action-card p,
+.action-card span {
+  display: block;
+}
+
+.action-card p {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.action-card span {
+  align-items: center;
+  color: #175cd3;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+
+.action-list,
+.focus-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.action-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+  color: #172033;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px;
+  text-align: left;
+}
+
+.action-row:hover {
+  background: #f1f7ff;
+  border-color: #bfd3f6;
+}
+
+.action-row strong,
+.action-row span,
+.action-row small {
+  display: block;
+}
+
+.action-row span,
+.focus-card span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.action-row-meta {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.action-row-meta small {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.focus-card {
+  align-items: start;
+  background: #f8fafc;
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  padding: 12px;
+}
+
+.focus-card svg {
+  color: #1570ef;
+  margin-top: 2px;
+}
+
+.focus-card strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.rail-actions .action-row {
+  background: #fff;
 }
 
 .row {
@@ -939,6 +1068,44 @@ kbd {
   padding: 14px;
 }
 
+.summary-strip {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.summary-card {
+  background: #fff;
+  border: 1px solid #dfe5ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.summary-card span,
+.summary-card small {
+  color: #667085;
+  display: block;
+  font-size: 12px;
+}
+
+.summary-card strong {
+  color: #172033;
+  font-size: 20px;
+}
+
+.detail-split {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.inner-panel {
+  align-self: start;
+  background: #fff;
+}
+
 .inline-form,
 .line-item,
 .actions {
@@ -989,7 +1156,27 @@ kbd {
 }
 
 .permission strong {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.permission strong {
   color: #172033;
+}
+
+.disabled-action-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+button.locked,
+button:disabled.locked {
+  background: #f8fafc;
+  border-color: #d0d5dd;
+  color: #667085;
 }
 
 .total-preview {
@@ -1027,6 +1214,30 @@ kbd {
 
 .empty-state span {
   font-size: 13px;
+}
+
+.skeleton-list {
+  display: grid;
+  gap: 10px;
+}
+
+.skeleton-row {
+  animation: pulse 1.2s ease-in-out infinite;
+  background: linear-gradient(90deg, #eef2f6 0%, #f8fafc 50%, #eef2f6 100%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  display: block;
+  height: 54px;
+}
+
+@keyframes pulse {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
 }
 
 .section-heading {
@@ -1179,11 +1390,14 @@ th {
   .app-shell,
   .two-column,
   .dashboard-grid,
+  .detail-split,
   .walkthrough-grid,
   .hero-panel,
   .user-row,
   .alert-strip,
-  .stats {
+  .stats,
+  .summary-strip,
+  .dashboard-actions {
     grid-template-columns: 1fr;
   }
 
