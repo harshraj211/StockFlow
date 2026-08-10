@@ -66,7 +66,7 @@ async function confirmChallan(challanId: string, userId: string) {
   });
 }
 
-// GET /challans — paginated list with search
+// GET /challans  paginated list with search
 challanRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -98,7 +98,7 @@ challanRouter.get(
   })
 );
 
-// POST /challans — create challan (ADMIN, SALES)
+// POST /challans  create challan (ADMIN, SALES)
 challanRouter.post(
   "/",
   requireRoles(Role.ADMIN, Role.SALES),
@@ -173,7 +173,7 @@ challanRouter.post(
   })
 );
 
-// GET /challans/:id — full challan detail
+// GET /challans/:id  full challan detail
 challanRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {
@@ -191,7 +191,7 @@ challanRouter.get(
   })
 );
 
-// PATCH /challans/:id/notes — update notes on a DRAFT challan (ADMIN, SALES)
+// PATCH /challans/:id/notes  update notes on a DRAFT challan (ADMIN, SALES)
 challanRouter.patch(
   "/:id/notes",
   requireRoles(Role.ADMIN, Role.SALES),
@@ -212,7 +212,7 @@ challanRouter.patch(
   })
 );
 
-// PATCH /challans/:id/status — confirm or cancel (ADMIN, SALES, ACCOUNTS)
+// PATCH /challans/:id/status  confirm or cancel (ADMIN, SALES, ACCOUNTS)
 challanRouter.patch(
   "/:id/status",
   requireRoles(Role.ADMIN, Role.SALES, Role.ACCOUNTS),
@@ -225,7 +225,7 @@ challanRouter.patch(
       return res.json(confirmed);
     }
 
-    // Cancel — only allowed from DRAFT state
+    // Cancel  only allowed from DRAFT state
     const challan = await prisma.salesChallan.findUnique({ where: { id } });
     if (!challan) throw new HttpError(404, "Challan not found");
     if (challan.status === ChallanStatus.CONFIRMED)
