@@ -6,6 +6,26 @@ export const paginationQuery = z.object({
   search: z.string().trim().optional()
 });
 
+export const customerListQuery = paginationQuery.extend({
+  status: z.enum(["LEAD", "ACTIVE", "INACTIVE"]).optional(),
+  priority: z.enum(["HOT", "WARM", "COLD"]).optional(),
+  type: z.enum(["RETAIL", "WHOLESALE", "DISTRIBUTOR"]).optional()
+});
+
+export const productListQuery = paginationQuery.extend({
+  category: z.string().trim().min(1).optional(),
+  location: z.string().trim().min(1).optional(),
+  stockState: z.enum(["HEALTHY", "LOW", "OUT"]).optional()
+});
+
+export const challanListQuery = paginationQuery.extend({
+  status: z.enum(["DRAFT", "CONFIRMED", "CANCELLED"]).optional()
+});
+
+export const activityListQuery = paginationQuery.extend({
+  entityType: z.enum(["CUSTOMER", "PRODUCT", "CHALLAN", "USER", "SYSTEM"]).optional()
+});
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6)
