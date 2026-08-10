@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "Mini ERP + CRM — Full Collection",
+    "name": "Mini ERP + CRM  Full Collection",
     "description": "Complete API collection for the Mini ERP + CRM Operations Portal. Set baseUrl to your deployed backend URL. Run 'Auth - Login Admin' first to auto-populate the token variable.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -29,7 +29,7 @@
       "name": "Auth",
       "item": [
         {
-          "name": "Login — Admin",
+          "name": "Login  Admin",
           "event": [
             {
               "listen": "test",
@@ -54,7 +54,7 @@
           }
         },
         {
-          "name": "Login — Sales",
+          "name": "Login  Sales",
           "event": [
             {
               "listen": "test",
@@ -78,7 +78,7 @@
           }
         },
         {
-          "name": "Login — Warehouse",
+          "name": "Login  Warehouse",
           "event": [
             {
               "listen": "test",
@@ -102,7 +102,7 @@
           }
         },
         {
-          "name": "Login — Accounts",
+          "name": "Login  Accounts",
           "event": [
             {
               "listen": "test",
@@ -126,7 +126,7 @@
           }
         },
         {
-          "name": "Login — Invalid (test error)",
+          "name": "Login  Invalid (test error)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -341,7 +341,7 @@
           }
         },
         {
-          "name": "Add Stock Movement — IN",
+          "name": "Add Stock Movement  IN",
           "request": {
             "method": "POST",
             "header": [
@@ -356,7 +356,7 @@
           }
         },
         {
-          "name": "Add Stock Movement — OUT",
+          "name": "Add Stock Movement  OUT",
           "request": {
             "method": "POST",
             "header": [
@@ -371,7 +371,7 @@
           }
         },
         {
-          "name": "Stock Movement — Insufficient (test error)",
+          "name": "Stock Movement  Insufficient (test error)",
           "request": {
             "method": "POST",
             "header": [
@@ -584,7 +584,7 @@
           }
         },
         {
-          "name": "Create User — Non-Admin (test 403)",
+          "name": "Create User  Non-Admin (test 403)",
           "request": {
             "method": "POST",
             "header": [
@@ -596,7 +596,7 @@
               "raw": "{\n  \"name\": \"Hacker\",\n  \"email\": \"hacker@fundsroom.test\",\n  \"password\": \"Password@123\",\n  \"role\": \"ADMIN\"\n}"
             },
             "url": "{{baseUrl}}/users",
-            "description": "Login as Sales first, then try this — should return 403"
+            "description": "Login as Sales first, then try this  should return 403"
           }
         }
       ]
