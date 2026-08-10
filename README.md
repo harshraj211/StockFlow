@@ -20,6 +20,8 @@ Full-stack case study for a wholesale/distribution business. The app covers auth
 - **Product & Inventory Module**: Product management with SKU uniqueness enforcement, category/location tracking, stock level warnings, and full stock movement audit logging (`IN` / `OUT` with reason & user attribution).
 - **Sales Challan Engine**: Multi-product challan creation (Draft or Confirmed), auto-generated sequential numbers (`CH-2026-00001`), snapshotting of product details (name, SKU, unit price), total amount computation, and atomic database transactions ensuring stock never drops below zero.
 - **Admin User Management**: `ADMIN` role can list users, register new team members, adjust roles, and activate/deactivate accounts.
+- **Operational UI Polish**: Customer/product edit flows, product filters, low-stock-only view, manual stock movement entry, challan detail view, print/PDF export flow, and role-aware read-only states.
+- **Backend Test Coverage**: Tests cover login, role denial, negative stock prevention, and challan confirmation stock deduction.
 
 ---
 
@@ -79,6 +81,13 @@ Default local endpoints:
 - **Frontend App**: `http://localhost:5173`
 - **Backend API**: `http://localhost:4000`
 - **Health Check**: `http://localhost:4000/health`
+
+### 6. Run Tests
+
+```bash
+pnpm --filter backend test
+pnpm build
+```
 
 ---
 
@@ -144,6 +153,13 @@ A complete, production-ready Postman collection is included in `postman/Mini_ERP
 - `src/http.ts`: Standardized HTTP error class and async route handler wrapper.
 - `prisma/schema.prisma`: Data models with relations, enums, indexes, and precision numeric types (`Decimal(12,2)`).
 
+### Frontend (`apps/frontend`)
+- Dashboard: Revenue KPIs, low-stock alerts, upcoming follow-ups, and recent challans.
+- Customers: Add/edit customers, follow-up filters, detail view, and follow-up notes.
+- Products: Add/edit products, category/location/low-stock filters, manual stock movement, and movement history.
+- Challans: Create draft/confirmed challans, detail view, draft notes, confirm/cancel actions, and print/PDF export.
+- Users: Admin-only user creation, role updates, activation, and deactivation.
+
 ---
 
 ## Key Assumptions & Business Logic
@@ -161,3 +177,31 @@ A complete, production-ready Postman collection is included in `postman/Mini_ERP
 - **Postman Collection**: `postman/Mini_ERP_CRM.postman_collection.json`
 - **Seeded Credentials**: Admin, Sales, Warehouse, Accounts (`Password@123`)
 - **Documentation**: Comprehensive README with setup, architecture, and API specs
+
+---
+
+## Demo Recording Checklist
+
+Recommended 4-6 minute walkthrough:
+
+1. Login as Admin and show dashboard KPIs.
+2. Add or edit a customer and add a follow-up note.
+3. Filter customers by follow-up state.
+4. Add or edit a product, then record an IN/OUT stock movement.
+5. Show product filters and movement history.
+6. Create a draft challan with notes and multiple items.
+7. Open challan detail, confirm it, and show stock reduction.
+8. Use Print / Export PDF from the challan detail view.
+9. Show Admin user management and role-aware read-only behavior.
+10. Open Postman collection or README briefly to show API/documentation readiness.
+
+## Deployment Checklist
+
+Before final submission:
+
+1. Create a Neon or Supabase PostgreSQL database.
+2. Deploy backend on Render/Railway/Fly.io with `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `FRONTEND_URL`, and `PORT`.
+3. Run `pnpm --filter backend exec prisma migrate deploy` against production.
+4. Seed demo credentials only if the deployment is for review.
+5. Deploy frontend on Vercel/Netlify with `VITE_API_URL` pointing to the backend URL.
+6. Update this README with live frontend URL, live backend API URL, and final GitHub repository link.
