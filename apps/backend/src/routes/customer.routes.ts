@@ -3,7 +3,7 @@ import { ActivityEntityType, CustomerPriority, CustomerStatus, CustomerType, Rol
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
 import { asyncHandler, HttpError, routeParam } from "../http.js";
-import { customerSchema, followUpSchema, paginationQuery } from "../validators.js";
+import { customerListQuery, customerSchema, followUpSchema } from "../validators.js";
 import { logActivity } from "../activity.js";
 
 export const customerRouter = Router();
@@ -12,17 +12,22 @@ customerRouter.use(requireAuth);
 customerRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const query = paginationQuery.parse(req.query);
-    const where = query.search
-      ? {
-          OR: [
-            { name: { contains: query.search, mode: "insensitive" as const } },
-            { mobile: { contains: query.search, mode: "insensitive" as const } },
-            { email: { contains: query.search, mode: "insensitive" as const } },
-            { businessName: { contains: query.search, mode: "insensitive" as const } }
-          ]
-        }
-      : {};
+    const query = customerListQuery.parse(req.query);
+    const where = {
+      ...(query.search
+        ? {
+            OR: [
+              { name: { contains: query.search, mode: "insensitive" as const } },
+              { mobile: { contains: query.search, mode: "insensitive" as const } },
+              { email: { contains: query.search, mode: "insensitive" as const } },
+              { businessName: { contains: query.search, mode: "insensitive" as const } }
+            ]
+          }
+        : {}),
+      ...(query.status ? { status: query.status as CustomerStatus } : {}),
+      ...(query.priority ? { priority: query.priority as CustomerPriority } : {}),
+      ...(query.type ? { type: query.type as CustomerType } : {})
+    };
     const [items, total] = await Promise.all([
       prisma.customer.findMany({
         where,
@@ -71,7 +76,30 @@ customerRouter.get(
     const id = routeParam(req.params.id, "id");
     const customer = await prisma.customer.findUnique({
       where: { id },
-      include: { followUps: { include: { createdBy: { select: { name: true, role: true } } }, orderBy: { createdAt: "desc" } } }
+      include: {
+        followUps: {
+          include: { createdBy: { select: { name: true, role: true } } },
+          orderBy: { createdAt: "desc" }
+        },
+        challans: {
+          orderBy: { createdAt: "desc" },
+          take: 8,
+          include: {
+            createdBy: { select: { name: true, role: true } },
+            items: {
+              select: {
+                id: true,
+                productName: true,
+                sku: true,
+                category: true,
+                unitPrice: true,
+                location: true,
+                quantity: true
+              }
+            }
+          }
+        }
+      }
     });
     if (!customer) throw new HttpError(404, "Customer not found");
     return res.json(customer);
