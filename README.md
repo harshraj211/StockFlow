@@ -1,177 +1,165 @@
 # Mini ERP + CRM Operations Portal
 
-Full-stack case study for a wholesale/distribution business. The app covers authentication, role-based access, customer CRM, product inventory, stock movement logs, and sales challans that reduce stock only when confirmed.
+Full-stack case study for a wholesale/distribution business. The app covers authentication, role-based access control (RBAC), customer CRM with follow-up tracking, product inventory management, stock movement audit logs, and sales challans with automatic stock deduction and snapshot preservation.
 
 ## Tech Stack
 
-- Backend: Node.js, TypeScript, Express.js, Prisma, PostgreSQL, JWT
-- Frontend: React, TypeScript, Vite, CSS
-- DevOps: Docker Compose for local PostgreSQL, environment-based configuration
+- **Backend**: Node.js, TypeScript, Express.js, Prisma ORM, PostgreSQL, JWT, Zod, Helmet, Express Rate Limit
+- **Frontend**: React 19, TypeScript, Vite, CSS (Vanilla Design System)
+- **DevOps**: Docker Compose (PostgreSQL), Environment-based configuration
 
-## Features
+---
 
-- JWT login with Admin, Sales, Warehouse, and Accounts roles
-- Customer CRM with search, detail view, follow-up dates, and follow-up notes
-- Product inventory with SKU, stock, minimum stock alerts, and warehouse location
-- Stock movement logging for IN and OUT movements
-- Sales challan creation with multiple products
-- Draft, confirmed, and cancelled challan states
-- Business logic to block negative stock and store product snapshot data on challans
-- Responsive admin-style UI
+## Key Backend Features & Enhancements
+
+- 🔐 **JWT Authentication & RBAC**: Roles (`ADMIN`, `SALES`, `WAREHOUSE`, `ACCOUNTS`) with granular endpoint protection and user account activation control (`isActive`).
+- 🛡️ **Security & Rate Limiting**: Built-in rate limiting on `/auth/login` (20 req/15min) and Helmet HTTP security headers.
+- 🩺 **Health Check API**: `GET /health` conducts a live database ping check (`SELECT 1`).
+- 📊 **Executive Dashboard KPIs**: `GET /dashboard/stats` provides total revenue, active/lead customer breakdowns, low-stock inventory items, upcoming follow-ups, and recent sales challans.
+- 👥 **Customer CRM Module**: Full CRUD, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
+- 📦 **Product & Inventory Module**: Product management with SKU uniqueness enforcement, category/location tracking, stock level warnings, and full stock movement audit logging (`IN` / `OUT` with reason & user attribution).
+- 📜 **Sales Challan Engine**: Multi-product challan creation (Draft or Confirmed), auto-generated sequential numbers (`CH-2026-00001`), snapshotting of product details (name, SKU, unit price), total amount computation, and atomic database transactions ensuring stock never drops below zero.
+- 👤 **Admin User Management**: `ADMIN` role can list users, register new team members, adjust roles, and activate/deactivate accounts.
+
+---
 
 ## Test Credentials
 
-All seeded users use the password:
+All seeded accounts use the password: `Password@123`
 
-```text
-Password@123
-```
+| Role | Email | Permissions |
+| --- | --- | --- |
+| **Admin** | `admin@fundsroom.test` | Full operational access + user management |
+| **Sales** | `sales@fundsroom.test` | Manage customers, follow-up notes, create/edit challans |
+| **Warehouse** | `warehouse@fundsroom.test` | Manage products & execute stock movements |
+| **Accounts** | `accounts@fundsroom.test` | View reports, confirm/cancel challans for billing |
 
-| Role | Email |
-| --- | --- |
-| Admin | admin@fundsroom.test |
-| Sales | sales@fundsroom.test |
-| Warehouse | warehouse@fundsroom.test |
-| Accounts | accounts@fundsroom.test |
+---
 
 ## Local Setup
 
-1. Install dependencies:
+### 1. Install Dependencies
 
 ```bash
 pnpm install
 ```
 
-2. Copy environment files:
+### 2. Configure Environment Variables
+
+Copy the sample env files:
 
 ```bash
 cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env
 ```
 
-3. Start PostgreSQL:
+### 3. Start Database (PostgreSQL)
 
+If using Docker:
 ```bash
 docker compose up -d
 ```
+*(Alternatively, supply your own PostgreSQL connection string in `apps/backend/.env`)*
 
-4. Create database tables and seed demo data:
+### 4. Database Migration & Seeding
 
 ```bash
+pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
 ```
 
-5. Start backend and frontend:
+### 5. Start Development Servers
 
 ```bash
 pnpm dev
 ```
 
-Default URLs:
+Default local endpoints:
+- **Frontend App**: `http://localhost:5173`
+- **Backend API**: `http://localhost:4000`
+- **Health Check**: `http://localhost:4000/health`
 
-- Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:4000`
-- Health check: `http://localhost:4000/health`
+---
 
-## API Overview
+## API Endpoints Reference
 
-All endpoints except `/auth/login` require:
+All endpoints (except `/auth/login` and `/health`) require:
+`Authorization: Bearer <token>`
 
-```text
-Authorization: Bearer <token>
-```
+### Auth & Health
+- `GET  /health` - Live database status check
+- `POST /auth/login` - Authenticate user & return JWT token (rate-limited)
 
-Main endpoints:
+### Executive Dashboard
+- `GET  /dashboard/stats` - Consolidated KPIs, revenue, low stock list, & upcoming follow-ups
 
-- `POST /auth/login`
-- `GET /customers`
-- `POST /customers`
-- `GET /customers/:id`
-- `PUT /customers/:id`
-- `POST /customers/:id/follow-ups`
-- `GET /products`
-- `POST /products`
-- `PUT /products/:id`
-- `GET /products/:id/movements`
-- `POST /products/:id/movements`
-- `GET /challans`
-- `POST /challans`
-- `PATCH /challans/:id/status`
+### Customers (CRM)
+- `GET  /customers` - List customers (supports `page`, `limit`, `search`)
+- `POST /customers` - Create new customer (`ADMIN`, `SALES`)
+- `GET  /customers/:id` - Get customer details + follow-up history
+- `PUT  /customers/:id` - Update customer details (`ADMIN`, `SALES`)
+- `POST /customers/:id/follow-ups` - Append follow-up note (`ADMIN`, `SALES`)
 
-Pagination/search endpoints support `page`, `limit`, and `search` query parameters.
+### Products & Inventory
+- `GET  /products` - List products (supports `page`, `limit`, `search`)
+- `POST /products` - Add product (`ADMIN`, `WAREHOUSE`)
+- `GET  /products/:id` - Get product details + recent stock movements
+- `PUT  /products/:id` - Edit product (`ADMIN`, `WAREHOUSE`)
+- `GET  /products/:id/movements` - View paginated stock movement audit trail
+- `POST /products/:id/movements` - Manual stock adjustment (`IN`/`OUT`) (`ADMIN`, `WAREHOUSE`)
 
-## Role Access
+### Sales Challans
+- `GET   /challans` - List sales challans (supports `page`, `limit`, `search`)
+- `POST  /challans` - Create challan (Draft or Confirmed) (`ADMIN`, `SALES`)
+- `GET   /challans/:id` - View complete challan details with item snapshots
+- `PATCH /challans/:id/notes` - Update notes on draft challan (`ADMIN`, `SALES`)
+- `PATCH /challans/:id/status` - Change status to `CONFIRMED` or `CANCELLED` (`ADMIN`, `SALES`, `ACCOUNTS`)
 
-- Admin: full operational access
-- Sales: customers, follow-ups, challans
-- Warehouse: products and stock movements
-- Accounts: read records and confirm/cancel challans for billing workflow
+### User Management (`ADMIN` Only)
+- `GET   /users` - List all internal users
+- `POST  /users` - Create user account
+- `PUT   /users/:id` - Update user name or role
+- `PATCH /users/:id/deactivate` - Soft-deactivate user account
+- `PATCH /users/:id/activate` - Re-activate user account
 
-## Architecture
+---
 
-The backend is a layered Express API:
+## Postman Collection
 
-- `src/app.ts` configures middleware and routes
-- `src/routes/*` contains REST endpoints
-- `src/validators.ts` centralizes Zod validation
-- `src/auth.ts` handles JWT authentication and role checks
-- `prisma/schema.prisma` defines database tables and relations
+A complete, production-ready Postman collection is included in `postman/Mini_ERP_CRM.postman_collection.json`.
 
-The frontend is a Vite React app with a compact admin interface. It uses Axios with a token interceptor and keeps the required flows available from a single dashboard-style shell.
+**Features of the Postman Collection:**
+- **Auto-Token Capture**: Logging in as any user automatically sets the `{{token}}` collection variable for all subsequent requests.
+- **Auto-ID Capture**: Creating a customer, product, or challan automatically populates `{{customerId}}`, `{{productId}}`, and `{{challanId}}`.
+- **Negative & Role Validation Tests**: Includes test cases for insufficient stock errors, invalid credentials, and non-admin permission denials (403).
 
-## Deployment Notes
+---
 
-Free deployment option:
+## Architecture & Code Design
 
-- Database: Neon or Supabase Postgres
-- Backend: Render, Railway, or Fly.io
-- Frontend: Vercel or Netlify
+### Backend (`apps/backend`)
+- `src/app.ts`: Express application setup, security middleware (Helmet, Rate Limiter, CORS), route mounting, and central error handling.
+- `src/auth.ts`: Auth middleware verifying JWT signatures and enforcing role-based permissions (`requireRoles`).
+- `src/routes/*`: Modular REST controllers for Auth, Customers, Products, Challans, Users, and Dashboard.
+- `src/validators.ts`: Type-safe request body & parameter validation using Zod.
+- `src/http.ts`: Standardized HTTP error class and async route handler wrapper.
+- `prisma/schema.prisma`: Data models with relations, enums, indexes, and precision numeric types (`Decimal(12,2)`).
 
-Backend environment variables:
+---
 
-```text
-DATABASE_URL=postgresql://...
-JWT_SECRET=strong-production-secret
-JWT_EXPIRES_IN=1d
-PORT=4000
-FRONTEND_URL=https://your-frontend-url
-```
+## Key Assumptions & Business Logic
 
-Frontend environment variable:
+1. **Stock Deduction**: Stock is deducted inside a serializable Prisma transaction only when a challan is set to `CONFIRMED` state.
+2. **Negative Stock Prevention**: Transactions fail atomically with HTTP 400 if product stock is lower than requested quantity.
+3. **Data Immutability (Snapshots)**: Product details (name, SKU, unit price, category) are snapshot into `SalesChallanItem` rows upon creation, preserving historical records even if product details change later.
+4. **Draft Cancellation**: Challans can only be cancelled from `DRAFT` status. Confirmed challans cannot be cancelled directly to maintain audit trail consistency.
 
-```text
-VITE_API_URL=https://your-backend-url
-```
+---
 
-Deployment flow:
+## Submission Deliverables
 
-1. Create a hosted PostgreSQL database.
-2. Set backend environment variables in the hosting dashboard.
-3. Deploy backend from `apps/backend` with build command `pnpm install && pnpm --filter backend build` and start command `pnpm --filter backend start`.
-4. Run migrations against the hosted database: `pnpm --filter backend prisma migrate deploy`.
-5. Deploy frontend from `apps/frontend` with build command `pnpm install && pnpm --filter frontend build`.
-6. Set `VITE_API_URL` to the live backend URL.
-
-## Assumptions
-
-- Challan stock is reduced only once, when moving from Draft to Confirmed or when directly created as Confirmed.
-- Cancelled challans do not restore stock because only unconfirmed drafts can be cancelled in the intended flow.
-- Product snapshot data is copied into challan items so future product edits do not alter old challans.
-- Email and SKU are unique identifiers.
-
-## Known Limitations
-
-- No automated test suite yet.
-- No PDF invoice export or S3 product images; those are listed as bonus items in the assignment.
-- Local setup assumes Docker is available for PostgreSQL. A hosted Postgres URL can be used instead.
-
-## Submission Checklist
-
-- GitHub repository link
-- Live frontend URL
-- Live backend API URL
-- Test login credentials above
-- Postman collection: `postman/Mini_ERP_CRM.postman_collection.json`
-- README setup and architecture notes
-- Known limitations section
+- **GitHub Repository**: Included
+- **Postman Collection**: `postman/Mini_ERP_CRM.postman_collection.json`
+- **Seeded Credentials**: Admin, Sales, Warehouse, Accounts (`Password@123`)
+- **Documentation**: Comprehensive README with setup, architecture, and API specs
