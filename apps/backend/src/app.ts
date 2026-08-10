@@ -11,6 +11,7 @@ import { productRouter } from "./routes/product.routes.js";
 import { challanRouter } from "./routes/challan.routes.js";
 import { usersRouter } from "./routes/users.routes.js";
 import { dashboardRouter } from "./routes/dashboard.routes.js";
+import { activityRouter } from "./routes/activity.routes.js";
 
 export const app = express();
 
@@ -45,4 +46,5 @@ app.use("/products", productRouter);
 app.use("/challans", challanRouter);
 app.use("/users", usersRouter);
 app.use("/dashboard", dashboardRouter);
+app.use("/activity", activityRouter);
 app.use(errorHandler);
