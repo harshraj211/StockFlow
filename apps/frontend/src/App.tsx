@@ -177,6 +177,10 @@ function formatMoney(value: string | number | undefined) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
 }
 
+function toDateInput(value?: string | null) {
+  return value ? new Date(value).toISOString().slice(0, 10) : "";
+}
+
 function Metric({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
   return (
     <article className="metric">
@@ -184,6 +188,15 @@ function Metric({ label, value, hint }: { label: string; value: number | string;
       <strong>{value}</strong>
       {hint && <small>{hint}</small>}
     </article>
+  );
+}
+
+function PermissionNotice({ text }: { text: string }) {
+  return (
+    <div className="panel permission">
+      <strong>Read-only access</strong>
+      <span>{text}</span>
+    </div>
   );
 }
 
@@ -243,14 +256,43 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans }: 
 function CustomersView({ user, customers, reload, setMessage }: { user: User; customers: Customer[]; reload: () => Promise<void>; setMessage: (value: string) => void }) {
   const [form, setForm] = useState(blankCustomer);
   const [selected, setSelected] = useState<Customer | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [followUpFilter, setFollowUpFilter] = useState<"ALL" | "TODAY" | "WEEK" | "OVERDUE" | "LEADS">("ALL");
+
+  function beginEdit(customer: Customer) {
+    setEditingId(customer.id);
+    setForm({
+      name: customer.name,
+      mobile: customer.mobile,
+      email: customer.email,
+      businessName: customer.businessName,
+      gstNumber: customer.gstNumber ?? "",
+      type: customer.type,
+      address: customer.address,
+      status: customer.status,
+      followUpDate: toDateInput(customer.followUpDate),
+      notes: customer.notes ?? ""
+    });
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setForm(blankCustomer);
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault();
     try {
-      await api.post("/customers", { ...form, followUpDate: form.followUpDate ? new Date(form.followUpDate).toISOString() : null });
-      setForm(blankCustomer);
-      setMessage("Customer saved");
+      const payload = { ...form, followUpDate: form.followUpDate ? new Date(form.followUpDate).toISOString() : null };
+      if (editingId) {
+        await api.put(`/customers/${editingId}`, payload);
+        setMessage("Customer updated");
+      } else {
+        await api.post("/customers", payload);
+        setMessage("Customer saved");
+      }
+      resetForm();
       await reload();
     } catch (error) {
       setMessage(errorMessage(error));
@@ -271,11 +313,28 @@ function CustomersView({ user, customers, reload, setMessage }: { user: User; cu
     }
   }
 
+  const filteredCustomers = customers.filter((customer) => {
+    if (followUpFilter === "LEADS") return customer.status === "LEAD";
+    if (!customer.followUpDate && followUpFilter !== "ALL") return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const date = customer.followUpDate ? new Date(customer.followUpDate) : null;
+    date?.setHours(0, 0, 0, 0);
+    if (followUpFilter === "TODAY") return date?.getTime() === today.getTime();
+    if (followUpFilter === "OVERDUE") return !!date && date < today;
+    if (followUpFilter === "WEEK") {
+      const weekEnd = new Date(today);
+      weekEnd.setDate(today.getDate() + 7);
+      return !!date && date >= today && date <= weekEnd;
+    }
+    return true;
+  });
+
   return (
     <section className="two-column">
       {can(user, ["ADMIN", "SALES"]) && (
         <form className="panel" onSubmit={save}>
-          <h2><UserRoundPlus /> Add Customer</h2>
+          <h2><UserRoundPlus /> {editingId ? "Edit Customer" : "Add Customer"}</h2>
           <input placeholder="Customer name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <input placeholder="Mobile" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} required />
           <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
@@ -294,16 +353,25 @@ function CustomersView({ user, customers, reload, setMessage }: { user: User; cu
           <input type="date" value={form.followUpDate} onChange={(e) => setForm({ ...form, followUpDate: e.target.value })} />
           <textarea placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required />
           <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          <button>Save Customer</button>
+          <div className="actions">
+            <button>{editingId ? "Update Customer" : "Save Customer"}</button>
+            {editingId && <button type="button" className="secondary" onClick={resetForm}>Cancel Edit</button>}
+          </div>
         </form>
       )}
+      {!can(user, ["ADMIN", "SALES"]) && <PermissionNotice text="This role can view CRM records but cannot create customers or add follow-up notes." />}
       <div className="panel list">
         <h2>Customer Records</h2>
-        {customers.map((customer) => (
+        <div className="filter-bar">
+          {(["ALL", "TODAY", "WEEK", "OVERDUE", "LEADS"] as const).map((filter) => (
+            <button key={filter} className={followUpFilter === filter ? "" : "secondary"} onClick={() => setFollowUpFilter(filter)}>{filter}</button>
+          ))}
+        </div>
+        {filteredCustomers.map((customer) => (
           <button className="row" key={customer.id} onClick={async () => setSelected((await api.get(`/customers/${customer.id}`)).data)}>
             <strong>{customer.businessName}</strong>
             <span>{customer.name} - {customer.mobile}</span>
-            <small>{customer.status} / {customer.type}</small>
+            <small>{customer.status} / {customer.type}{customer.followUpDate ? ` / Follow-up ${new Date(customer.followUpDate).toLocaleDateString()}` : ""}</small>
           </button>
         ))}
         {selected && (
@@ -311,6 +379,7 @@ function CustomersView({ user, customers, reload, setMessage }: { user: User; cu
             <h3>{selected.businessName}</h3>
             <p>{selected.address}</p>
             <p>{selected.notes}</p>
+            {can(user, ["ADMIN", "SALES"]) && <button className="secondary" onClick={() => beginEdit(selected)}>Edit Customer</button>}
             {can(user, ["ADMIN", "SALES"]) && (
               <form onSubmit={addNote} className="inline-form">
                 <input placeholder="Follow-up note" value={note} onChange={(e) => setNote(e.target.value)} required />
@@ -327,39 +396,138 @@ function CustomersView({ user, customers, reload, setMessage }: { user: User; cu
 
 function ProductsView({ user, products, reload, setMessage }: { user: User; products: Product[]; reload: () => Promise<void>; setMessage: (value: string) => void }) {
   const [form, setForm] = useState(blankProduct);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Product | null>(null);
+  const [movement, setMovement] = useState({ type: "IN" as "IN" | "OUT", quantity: 1, reason: "" });
+  const [category, setCategory] = useState("ALL");
+  const [location, setLocation] = useState("ALL");
+  const [lowOnly, setLowOnly] = useState(false);
+
+  const categories = Array.from(new Set(products.map((product) => product.category))).sort();
+  const locations = Array.from(new Set(products.map((product) => product.location))).sort();
+
+  function resetForm() {
+    setEditingId(null);
+    setForm(blankProduct);
+  }
+
+  function beginEdit(product: Product) {
+    setEditingId(product.id);
+    setForm({
+      name: product.name,
+      sku: product.sku,
+      category: product.category,
+      unitPrice: Number(product.unitPrice),
+      currentStock: product.currentStock,
+      minimumStock: product.minimumStock,
+      location: product.location
+    });
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault();
     try {
-      await api.post("/products", form);
-      setForm(blankProduct);
-      setMessage("Product saved");
+      if (editingId) {
+        await api.put(`/products/${editingId}`, form);
+        setMessage("Product updated");
+      } else {
+        await api.post("/products", form);
+        setMessage("Product saved");
+      }
+      resetForm();
       await reload();
     } catch (error) {
       setMessage(errorMessage(error));
     }
   }
 
+  async function selectProduct(product: Product) {
+    const detail = await api.get(`/products/${product.id}`);
+    setSelected(detail.data);
+  }
+
+  async function saveMovement(event: FormEvent) {
+    event.preventDefault();
+    if (!selected) return;
+    try {
+      const res = await api.post(`/products/${selected.id}/movements`, movement);
+      setSelected({ ...res.data.product, movements: [res.data.movement, ...(selected.movements ?? [])] });
+      setMovement({ type: "IN", quantity: 1, reason: "" });
+      setMessage("Stock movement recorded");
+      await reload();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
+
+  const filteredProducts = products.filter((product) => {
+    if (category !== "ALL" && product.category !== category) return false;
+    if (location !== "ALL" && product.location !== location) return false;
+    if (lowOnly && product.currentStock > product.minimumStock) return false;
+    return true;
+  });
+
   return (
     <section className="two-column">
       {can(user, ["ADMIN", "WAREHOUSE"]) && (
         <form className="panel" onSubmit={save}>
-          <h2><PackagePlus /> Add Product</h2>
+          <h2><PackagePlus /> {editingId ? "Edit Product" : "Add Product"}</h2>
           {Object.keys(blankProduct).map((key) => (
             <input key={key} type={["unitPrice", "currentStock", "minimumStock"].includes(key) ? "number" : "text"} placeholder={key} value={(form as Record<string, string | number>)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} required />
           ))}
-          <button>Save Product</button>
+          <div className="actions">
+            <button>{editingId ? "Update Product" : "Save Product"}</button>
+            {editingId && <button type="button" className="secondary" onClick={resetForm}>Cancel Edit</button>}
+          </div>
         </form>
       )}
+      {!can(user, ["ADMIN", "WAREHOUSE"]) && <PermissionNotice text="This role can inspect inventory but cannot edit products or record stock movement." />}
       <div className="panel list">
         <h2>Inventory</h2>
-        {products.map((product) => (
-          <article className="row" key={product.id}>
+        <div className="filter-grid">
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="ALL">All categories</option>
+            {categories.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+          <select value={location} onChange={(e) => setLocation(e.target.value)}>
+            <option value="ALL">All locations</option>
+            {locations.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+          <label className="check-row">
+            <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} />
+            Low stock only
+          </label>
+        </div>
+        {filteredProducts.map((product) => (
+          <article className="row" key={product.id} onClick={() => selectProduct(product)}>
             <strong>{product.name}</strong>
             <span>{product.sku} - {product.category} - {product.location}</span>
             <small className={product.currentStock <= product.minimumStock ? "danger" : ""}>Stock {product.currentStock} / Min {product.minimumStock}</small>
+            {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="secondary" onClick={(event) => { event.stopPropagation(); beginEdit(product); }}>Edit</button>}
           </article>
         ))}
+        {selected && (
+          <div className="detail">
+            <h3>{selected.name}</h3>
+            <p>{selected.sku} - {selected.category} - {selected.location}</p>
+            <p>Current stock: <strong>{selected.currentStock}</strong></p>
+            {can(user, ["ADMIN", "WAREHOUSE"]) && (
+              <form className="inline-form" onSubmit={saveMovement}>
+                <select value={movement.type} onChange={(e) => setMovement({ ...movement, type: e.target.value as "IN" | "OUT" })}>
+                  <option value="IN">IN</option>
+                  <option value="OUT">OUT</option>
+                </select>
+                <input type="number" min="1" value={movement.quantity} onChange={(e) => setMovement({ ...movement, quantity: Number(e.target.value) })} />
+                <input placeholder="Reason" value={movement.reason} onChange={(e) => setMovement({ ...movement, reason: e.target.value })} required />
+                <button>Record</button>
+              </form>
+            )}
+            <h3>Movement History</h3>
+            {(selected.movements ?? []).map((item) => (
+              <p className="note" key={item.id}>{item.type} {item.quantity} - {item.reason} - {item.createdBy?.name ?? "System"}</p>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -369,6 +537,8 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
   const [customerId, setCustomerId] = useState("");
   const [status, setStatus] = useState<"DRAFT" | "CONFIRMED">("DRAFT");
   const [notes, setNotes] = useState("");
+  const [detail, setDetail] = useState<Challan | null>(null);
+  const [detailNotes, setDetailNotes] = useState("");
   const [lines, setLines] = useState([{ productId: "", quantity: 1 }]);
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const draftTotal = lines.reduce((sum, line) => {
@@ -400,6 +570,77 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
     }
   }
 
+  async function openDetail(id: string) {
+    const res = await api.get(`/challans/${id}`);
+    setDetail(res.data);
+    setDetailNotes(res.data.notes ?? "");
+  }
+
+  async function saveDetailNotes(event: FormEvent) {
+    event.preventDefault();
+    if (!detail) return;
+    try {
+      const res = await api.patch(`/challans/${detail.id}/notes`, { notes: detailNotes || null });
+      setDetail({ ...detail, notes: res.data.notes });
+      setMessage("Challan notes updated");
+      await reload();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
+
+  function printChallan(challan: Challan) {
+    const rows = challan.items.map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${item.productName}<br><small>${item.sku} - ${item.category}</small></td>
+        <td>${item.location}</td>
+        <td>${item.quantity}</td>
+        <td>${formatMoney(item.unitPrice)}</td>
+        <td>${formatMoney(Number(item.unitPrice) * item.quantity)}</td>
+      </tr>
+    `).join("");
+    const html = `
+      <html>
+        <head>
+          <title>${challan.challanNumber}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #172033; padding: 32px; }
+            h1 { margin-bottom: 4px; }
+            table { border-collapse: collapse; width: 100%; margin-top: 24px; }
+            th, td { border: 1px solid #d7dde8; padding: 10px; text-align: left; vertical-align: top; }
+            th { background: #f2f5f8; }
+            .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 20px; }
+            .total { text-align: right; margin-top: 20px; font-size: 20px; font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <h1>Sales Challan</h1>
+          <p>${challan.challanNumber} - ${challan.status}</p>
+          <div class="meta">
+            <div><strong>Customer</strong><br>${challan.customer.businessName}<br>${challan.customer.name}<br>${challan.customer.mobile}</div>
+            <div><strong>Created</strong><br>${new Date(challan.createdAt).toLocaleString()}<br><strong>Created by</strong><br>${challan.createdBy?.name ?? "System"}</div>
+          </div>
+          ${challan.notes ? `<p><strong>Notes:</strong> ${challan.notes}</p>` : ""}
+          <table>
+            <thead><tr><th>#</th><th>Product</th><th>Location</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <p class="total">Total: ${formatMoney(challan.totalAmount)}</p>
+        </body>
+      </html>
+    `;
+    const popup = window.open("", "_blank", "width=900,height=700");
+    if (!popup) {
+      setMessage("Popup blocked. Allow popups to export challan.");
+      return;
+    }
+    popup.document.write(html);
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  }
+
   return (
     <section className="two-column">
       {can(user, ["ADMIN", "SALES"]) && (
@@ -428,24 +669,66 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
           <button>Save Challan</button>
         </form>
       )}
+      {!can(user, ["ADMIN", "SALES"]) && <PermissionNotice text="This role can review challans and, where allowed, confirm or cancel drafts for accounts workflow." />}
       <div className="panel list">
         <h2>Sales Challans</h2>
         {challans.map((challan) => (
-          <article className="row" key={challan.id}>
+          <article className="row" key={challan.id} onClick={() => openDetail(challan.id)}>
             <strong>{challan.challanNumber} - {challan.customer.businessName}</strong>
             <span>{challan.items.map((item) => `${item.productName} x ${item.quantity}`).join(", ")}</span>
             {challan.notes && <span>{challan.notes}</span>}
             <small>{challan.status} - Qty {challan.totalQuantity} - {formatMoney(challan.totalAmount)}</small>
             {challan.status === "DRAFT" && (
               <div className="actions">
-                <button onClick={() => updateStatus(challan.id, "CONFIRMED")}>Confirm</button>
-                <button className="secondary" onClick={() => updateStatus(challan.id, "CANCELLED")}>Cancel</button>
+                <button onClick={(event) => { event.stopPropagation(); updateStatus(challan.id, "CONFIRMED"); }}>Confirm</button>
+                <button className="secondary" onClick={(event) => { event.stopPropagation(); updateStatus(challan.id, "CANCELLED"); }}>Cancel</button>
               </div>
             )}
           </article>
         ))}
         {lines.some((line) => line.productId) && (
           <p className="muted">Selected stock: {lines.map((line) => productMap.get(line.productId)?.currentStock ?? "-").join(", ")}</p>
+        )}
+        {detail && (
+          <div className="detail">
+            <div className="section-heading">
+              <div>
+                <h3>{detail.challanNumber}</h3>
+                <p>{detail.customer.businessName} - {detail.status}</p>
+              </div>
+              <button className="secondary" onClick={() => printChallan(detail)}>Print / Export PDF</button>
+            </div>
+            <div className="meta-grid">
+              <p><strong>Total Qty</strong><br />{detail.totalQuantity}</p>
+              <p><strong>Total Amount</strong><br />{formatMoney(detail.totalAmount)}</p>
+              <p><strong>Created</strong><br />{new Date(detail.createdAt).toLocaleString()}</p>
+              <p><strong>Created By</strong><br />{detail.createdBy?.name ?? "System"}</p>
+            </div>
+            {detail.status === "DRAFT" && can(user, ["ADMIN", "SALES"]) ? (
+              <form onSubmit={saveDetailNotes} className="inline-form">
+                <input value={detailNotes} onChange={(e) => setDetailNotes(e.target.value)} placeholder="Draft notes" />
+                <button>Save Notes</button>
+              </form>
+            ) : detail.notes ? <p>{detail.notes}</p> : null}
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Product</th><th>Location</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>
+                </thead>
+                <tbody>
+                  {detail.items.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.productName}<br /><small>{item.sku} - {item.category}</small></td>
+                      <td>{item.location}</td>
+                      <td>{item.quantity}</td>
+                      <td>{formatMoney(item.unitPrice)}</td>
+                      <td>{formatMoney(Number(item.unitPrice) * item.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </div>
     </section>
