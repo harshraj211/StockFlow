@@ -1,0 +1,19 @@
+{
+  "name": "mini-erp-crm-portal",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mini ERP + CRM Operations Portal for wholesale and distribution workflows.",
+  "scripts": {
+    "dev": "pnpm --parallel --filter backend --filter frontend dev",
+    "build": "pnpm --recursive build",
+    "lint": "pnpm --recursive lint",
+    "db:generate": "pnpm --filter backend db:generate",
+    "db:migrate": "pnpm --filter backend db:migrate",
+    "db:seed": "pnpm --filter backend db:seed"
+  },
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  },
+  "packageManager": "pnpm@11.16.0"
+}
