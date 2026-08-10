@@ -26,6 +26,7 @@ export type Customer = {
   followUpDate?: string | null;
   notes?: string | null;
   followUps?: Array<{ id: string; note: string; createdAt: string; createdBy?: { name: string; role: Role } }>;
+  challans?: Challan[];
 };
 
 export type Product = {
