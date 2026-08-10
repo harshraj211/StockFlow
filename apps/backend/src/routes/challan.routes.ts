@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { ChallanStatus, MovementType, Role } from "@prisma/client";
+import { ActivityEntityType, ChallanStatus, MovementType, Role } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
 import { asyncHandler, HttpError, routeParam } from "../http.js";
 import { challanSchema, challanStatusSchema, paginationQuery, updateChallanNotesSchema } from "../validators.js";
+import { logActivity } from "../activity.js";
 
 export const challanRouter = Router();
 challanRouter.use(requireAuth);
@@ -55,13 +56,29 @@ async function confirmChallan(challanId: string, userId: string) {
       });
     }
 
-    return tx.salesChallan.update({
+    await tx.salesChallan.update({
       where: { id: challanId },
-      data: { status: ChallanStatus.CONFIRMED, confirmedAt: new Date() },
+      data: { status: ChallanStatus.CONFIRMED, confirmedAt: new Date() }
+    });
+    await tx.challanStatusHistory.create({
+      data: {
+        challanId,
+        fromStatus: challan.status,
+        toStatus: ChallanStatus.CONFIRMED,
+        note: "Stock deducted successfully during confirmation",
+        changedById: userId
+      }
+    });
+    return tx.salesChallan.findUniqueOrThrow({
+      where: { id: challanId },
       include: {
         customer: true,
         items: true,
-        createdBy: { select: { name: true, role: true } }
+        createdBy: { select: { name: true, role: true } },
+        statusHistory: {
+          include: { changedBy: { select: { name: true, role: true } } },
+          orderBy: { createdAt: "asc" }
+        }
       }
     });
   });
@@ -161,15 +178,44 @@ challanRouter.post(
       include: {
         customer: true,
         items: true,
-        createdBy: { select: { name: true, role: true } }
+        createdBy: { select: { name: true, role: true } },
+        statusHistory: {
+          include: { changedBy: { select: { name: true, role: true } } },
+          orderBy: { createdAt: "asc" }
+        }
+      }
+    });
+    await prisma.challanStatusHistory.create({
+      data: {
+        challanId: challan.id,
+        fromStatus: null,
+        toStatus: ChallanStatus.DRAFT,
+        note: body.status === "CONFIRMED" ? "Challan created before confirmation" : "Draft challan created",
+        changedById: req.user!.id
       }
     });
 
     if (body.status === "CONFIRMED") {
       const confirmed = await confirmChallan(challan.id, req.user!.id);
+      await logActivity({
+        action: "CHALLAN_CREATED_CONFIRMED",
+        entityType: ActivityEntityType.CHALLAN,
+        entityId: confirmed.id,
+        title: `${confirmed.challanNumber} created and confirmed`,
+        details: `Stock deducted for ${confirmed.totalQuantity} units`,
+        createdById: req.user!.id
+      });
       return res.status(201).json(confirmed);
     }
 
+    await logActivity({
+      action: "CHALLAN_CREATED",
+      entityType: ActivityEntityType.CHALLAN,
+      entityId: challan.id,
+      title: `${challan.challanNumber} draft challan created`,
+      details: `${challan.customer.businessName}, ${challan.totalQuantity} units`,
+      createdById: req.user!.id
+    });
     return res.status(201).json(challan);
   })
 );
@@ -184,7 +230,11 @@ challanRouter.get(
       include: {
         customer: true,
         items: true,
-        createdBy: { select: { id: true, name: true, role: true } }
+        createdBy: { select: { id: true, name: true, role: true } },
+        statusHistory: {
+          include: { changedBy: { select: { name: true, role: true } } },
+          orderBy: { createdAt: "asc" }
+        }
       }
     });
     if (!challan) throw new HttpError(404, "Challan not found");
@@ -279,7 +329,31 @@ challanRouter.patch(
     const updated = await prisma.salesChallan.update({
       where: { id },
       data: { notes: body.notes },
-      include: { customer: true, items: true }
+      include: {
+        customer: true,
+        items: true,
+        statusHistory: {
+          include: { changedBy: { select: { name: true, role: true } } },
+          orderBy: { createdAt: "asc" }
+        }
+      }
+    });
+    await prisma.challanStatusHistory.create({
+      data: {
+        challanId: updated.id,
+        fromStatus: challan.status,
+        toStatus: challan.status,
+        note: `Notes updated${body.notes ? `: ${body.notes}` : ""}`,
+        changedById: req.user!.id
+      }
+    });
+    await logActivity({
+      action: "CHALLAN_NOTES_UPDATED",
+      entityType: ActivityEntityType.CHALLAN,
+      entityId: updated.id,
+      title: `${updated.challanNumber} notes updated`,
+      details: body.notes,
+      createdById: req.user!.id
     });
     return res.json(updated);
   })
@@ -295,6 +369,14 @@ challanRouter.patch(
 
     if (body.status === "CONFIRMED") {
       const confirmed = await confirmChallan(id, req.user!.id);
+      await logActivity({
+        action: "CHALLAN_CONFIRMED",
+        entityType: ActivityEntityType.CHALLAN,
+        entityId: confirmed.id,
+        title: `${confirmed.challanNumber} confirmed`,
+        details: `Stock deducted for ${confirmed.totalQuantity} units`,
+        createdById: req.user!.id
+      });
       return res.json(confirmed);
     }
 
@@ -312,8 +394,29 @@ challanRouter.patch(
       include: {
         customer: true,
         items: true,
-        createdBy: { select: { name: true, role: true } }
+        createdBy: { select: { name: true, role: true } },
+        statusHistory: {
+          include: { changedBy: { select: { name: true, role: true } } },
+          orderBy: { createdAt: "asc" }
+        }
       }
+    });
+    await prisma.challanStatusHistory.create({
+      data: {
+        challanId: updated.id,
+        fromStatus: challan.status,
+        toStatus: ChallanStatus.CANCELLED,
+        note: "Draft challan cancelled",
+        changedById: req.user!.id
+      }
+    });
+    await logActivity({
+      action: "CHALLAN_CANCELLED",
+      entityType: ActivityEntityType.CHALLAN,
+      entityId: updated.id,
+      title: `${updated.challanNumber} cancelled`,
+      details: `${updated.customer.businessName}, no stock deducted`,
+      createdById: req.user!.id
     });
     return res.json(updated);
   })
