@@ -20,8 +20,9 @@ Full-stack case study for a wholesale/distribution business. The app covers auth
 - **Customer CRM Module**: Full CRUD, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
 - **Product & Inventory Module**: Product management with SKU uniqueness enforcement, category/location tracking, stock level warnings, and full stock movement audit logging (`IN` / `OUT` with reason & user attribution).
 - **Sales Challan Engine**: Multi-product challan creation (Draft or Confirmed), auto-generated sequential numbers (`CH-2026-00001`), snapshotting of product details (name, SKU, unit price), total amount computation, and atomic database transactions ensuring stock never drops below zero.
+- **Dedicated Challan Status History**: Every challan lifecycle event is stored with from/to status, note, actor, role, and timestamp for document-level auditability.
 - **Admin User Management**: `ADMIN` role can list users, register new team members, adjust roles, and activate/deactivate accounts.
-- **Operational UI Polish**: Customer/product edit flows, full customer detail panel, direct notification-to-record opening, product filters, low-stock-only view, manual stock movement entry, product movement audit trail, challan lifecycle timeline, professional browser print flow, server-generated PDF download, pagination controls, and role-aware read-only states.
+- **Operational UI Polish**: Customer/product edit flows, route-based record detail URLs, direct notification-to-record opening, product filters, low-stock-only view, manual stock movement entry, product movement audit trail, challan lifecycle timeline, professional browser print flow, server-generated PDF download, pagination controls, and role-aware read-only states.
 - **Backend Test Coverage**: Tests cover login, role denial, negative stock prevention, and challan confirmation stock deduction.
 
 ---
@@ -32,7 +33,7 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 
 1. **Actionable Dashboard**: Low stock, follow-up, draft challan, revenue, and operational exception signals are visible from the first screen.
 2. **Notification Deep Links**: Alerts open the exact customer, product, or challan record that needs attention.
-3. **Audit Thinking**: Customer activity, inventory movements, and challan lifecycle events are visible in timeline or ledger format.
+3. **Audit Thinking**: Global Activity Log, customer activity, inventory movements, and challan lifecycle events are visible in timeline or ledger format.
 4. **Strong Business Rules**: Stock confirmation is transactional, duplicate SKUs are blocked, and insufficient stock leaves the database unchanged.
 5. **Professional Document Output**: Challan print view includes StockFlow branding, customer details, item table, totals, notes, and signature area.
 6. **Role Demonstration**: Admin, Sales, Warehouse, and Accounts accounts show different permission boundaries clearly in the UI and API.
@@ -124,6 +125,9 @@ All endpoints (except `/auth/login` and `/health`) require:
 - `PUT  /customers/:id` - Update customer details (`ADMIN`, `SALES`)
 - `POST /customers/:id/follow-ups` - Append follow-up note (`ADMIN`, `SALES`)
 
+### Activity Log
+- `GET  /activity` - Global activity stream (supports `page`, `limit`, `search`)
+
 ### Products & Inventory
 - `GET  /products` - List products (supports `page`, `limit`, `search`)
 - `POST /products` - Add product (`ADMIN`, `WAREHOUSE`)
@@ -171,9 +175,11 @@ A complete, production-ready Postman collection is included in `postman/Mini_ERP
 ### Frontend (`apps/frontend`)
 - Walkthrough: Reviewer-ready demo guide, credentials, module shortcuts, and business-rule highlights.
 - Dashboard: Revenue KPIs, low-stock alerts, upcoming follow-ups, direct notification actions, and recent challans.
-- Customers: Add/edit customers, follow-up filters, full detail view, and follow-up notes.
+- Customers: Add/edit customers, Hot/Warm/Cold priority, follow-up filters, full detail view, and follow-up notes.
 - Products: Add/edit products, status badges, category/location/low-stock filters, reorder suggestion, manual stock movement, and audit history.
 - Challans: Create draft/confirmed challans, detail view, lifecycle timeline, draft notes, confirm/cancel actions, professional browser print, and server PDF download.
+- Activity: Global audit stream across CRM, inventory, challans, and admin actions.
+- Deep Links: Customer, product, and challan details support real URLs (`/customers/:id`, `/products/:id`, `/challans/:id`) with browser history support.
 - Lists: API-backed pagination controls on customer, product, challan, and user lists.
 - Users: Admin-only user creation, role updates, activation, and deactivation.
 
