@@ -43,7 +43,9 @@ model User {
   email          String         @unique
   passwordHash   String
   role           Role
+  isActive       Boolean        @default(true)
   createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
   customers      Customer[]     @relation("CustomerCreatedBy")
   followUps      FollowUpNote[]
   stockMovements StockMovement[]
@@ -113,7 +115,10 @@ model SalesChallan {
   customerId     String
   customer       Customer           @relation(fields: [customerId], references: [id])
   totalQuantity  Int
+  totalAmount    Decimal            @default(0) @db.Decimal(14, 2)
+  notes          String?
   status         ChallanStatus      @default(DRAFT)
+  confirmedAt    DateTime?
   createdById    String
   createdBy      User               @relation(fields: [createdById], references: [id])
   items          SalesChallanItem[]
