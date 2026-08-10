@@ -20,6 +20,7 @@ export type Customer = {
   businessName: string;
   gstNumber?: string | null;
   type: "RETAIL" | "WHOLESALE" | "DISTRIBUTOR";
+  priority: "HOT" | "WARM" | "COLD";
   address: string;
   status: "LEAD" | "ACTIVE" | "INACTIVE";
   followUpDate?: string | null;
@@ -60,6 +61,14 @@ export type Challan = {
   createdAt: string;
   confirmedAt?: string | null;
   createdBy?: { id?: string; name: string; role: Role };
+  statusHistory?: Array<{
+    id: string;
+    fromStatus?: "DRAFT" | "CONFIRMED" | "CANCELLED" | null;
+    toStatus: "DRAFT" | "CONFIRMED" | "CANCELLED";
+    note?: string | null;
+    createdAt: string;
+    changedBy?: { name: string; role: Role };
+  }>;
   items: Array<{
     id: string;
     productName: string;
@@ -73,12 +82,23 @@ export type Challan = {
 
 export type DashboardStats = {
   customers: { total: number; active: number; leads: number; inactive: number };
-  products: { total: number; lowStock: number };
+  products: { total: number; healthyStock: number; lowStock: number; outOfStock: number };
   challans: { total: number; draft: number; confirmed: number; cancelled: number };
   revenue: { confirmedTotal: string | number };
   recentChallans: Challan[];
   lowStockList: Product[];
   upcomingFollowUps: Customer[];
+};
+
+export type ActivityLog = {
+  id: string;
+  action: string;
+  entityType: "CUSTOMER" | "PRODUCT" | "CHALLAN" | "USER" | "SYSTEM";
+  entityId?: string | null;
+  title: string;
+  details?: string | null;
+  createdAt: string;
+  createdBy?: { name: string; role: Role } | null;
 };
 
 export const api = axios.create({
