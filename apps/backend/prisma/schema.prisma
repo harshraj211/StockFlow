@@ -26,6 +26,12 @@ enum CustomerStatus {
   INACTIVE
 }
 
+enum CustomerPriority {
+  HOT
+  WARM
+  COLD
+}
+
 enum MovementType {
   IN
   OUT
@@ -35,6 +41,14 @@ enum ChallanStatus {
   DRAFT
   CONFIRMED
   CANCELLED
+}
+
+enum ActivityEntityType {
+  CUSTOMER
+  PRODUCT
+  CHALLAN
+  USER
+  SYSTEM
 }
 
 model User {
@@ -50,6 +64,8 @@ model User {
   followUps      FollowUpNote[]
   stockMovements StockMovement[]
   challans       SalesChallan[]
+  activities     ActivityLog[]
+  challanStatusHistory ChallanStatusHistory[]
 }
 
 model Customer {
@@ -62,6 +78,7 @@ model Customer {
   type         CustomerType
   address      String
   status       CustomerStatus
+  priority     CustomerPriority @default(WARM)
   followUpDate DateTime?
   notes        String?
   createdById  String
@@ -122,6 +139,7 @@ model SalesChallan {
   createdById    String
   createdBy      User               @relation(fields: [createdById], references: [id])
   items          SalesChallanItem[]
+  statusHistory  ChallanStatusHistory[]
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 }
@@ -138,4 +156,33 @@ model SalesChallanItem {
   unitPrice     Decimal      @db.Decimal(12, 2)
   location      String
   quantity      Int
+}
+
+model ActivityLog {
+  id         String             @id @default(cuid())
+  action     String
+  entityType ActivityEntityType
+  entityId   String?
+  title      String
+  details    String?
+  createdById String?
+  createdBy  User?             @relation(fields: [createdById], references: [id])
+  createdAt  DateTime          @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model ChallanStatusHistory {
+  id          String         @id @default(cuid())
+  challanId   String
+  challan     SalesChallan  @relation(fields: [challanId], references: [id], onDelete: Cascade)
+  fromStatus  ChallanStatus?
+  toStatus    ChallanStatus
+  note        String?
+  changedById String
+  changedBy   User          @relation(fields: [changedById], references: [id])
+  createdAt   DateTime      @default(now())
+
+  @@index([challanId, createdAt])
 }
