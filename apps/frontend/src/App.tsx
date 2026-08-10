@@ -57,28 +57,41 @@ export function App() {
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [teamUsers, setTeamUsers] = useState<User[]>([]);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totals, setTotals] = useState({ customers: 0, products: 0, challans: 0, users: 0 });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function loadData() {
     if (!localStorage.getItem("token")) return;
+    const params = { page, limit: 10, search };
     const [customerRes, productRes, challanRes, dashboardRes, usersRes] = await Promise.all([
-      api.get("/customers", { params: { limit: 50, search } }),
-      api.get("/products", { params: { limit: 50, search } }),
-      api.get("/challans", { params: { limit: 50, search } }),
+      api.get("/customers", { params }),
+      api.get("/products", { params }),
+      api.get("/challans", { params }),
       api.get("/dashboard/stats"),
-      user?.role === "ADMIN" ? api.get("/users", { params: { limit: 50, search } }) : Promise.resolve({ data: { items: [] } })
+      user?.role === "ADMIN" ? api.get("/users", { params }) : Promise.resolve({ data: { items: [], total: 0 } })
     ]);
     setCustomers(customerRes.data.items);
     setProducts(productRes.data.items);
     setChallans(challanRes.data.items);
     setDashboardStats(dashboardRes.data);
     setTeamUsers(usersRes.data.items);
+    setTotals({
+      customers: customerRes.data.total,
+      products: productRes.data.total,
+      challans: challanRes.data.total,
+      users: usersRes.data.total
+    });
   }
 
   useEffect(() => {
     loadData().catch((error) => setMessage(errorMessage(error)));
-  }, [user, search]);
+  }, [user, search, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, search]);
 
   async function login(email: string) {
     setLoading(true);
@@ -163,10 +176,10 @@ export function App() {
         {message && <p className="alert">{message}</p>}
 
         {tab === "dashboard" && <DashboardView stats={dashboardStats} customers={customers.length} products={products.length} lowStock={lowStock.length} draftChallans={draftChallans.length} />}
-        {tab === "customers" && <CustomersView user={user} customers={customers} reload={loadData} setMessage={setMessage} />}
-        {tab === "products" && <ProductsView user={user} products={products} reload={loadData} setMessage={setMessage} />}
-        {tab === "challans" && <ChallansView user={user} customers={customers} products={products} challans={challans} reload={loadData} setMessage={setMessage} />}
-        {tab === "users" && user.role === "ADMIN" && <UsersView currentUser={user} users={teamUsers} reload={loadData} setMessage={setMessage} />}
+        {tab === "customers" && <CustomersView user={user} customers={customers} page={page} total={totals.customers} setPage={setPage} reload={loadData} setMessage={setMessage} />}
+        {tab === "products" && <ProductsView user={user} products={products} page={page} total={totals.products} setPage={setPage} reload={loadData} setMessage={setMessage} />}
+        {tab === "challans" && <ChallansView user={user} customers={customers} products={products} challans={challans} page={page} total={totals.challans} setPage={setPage} reload={loadData} setMessage={setMessage} />}
+        {tab === "users" && user.role === "ADMIN" && <UsersView currentUser={user} users={teamUsers} page={page} total={totals.users} setPage={setPage} reload={loadData} setMessage={setMessage} />}
       </section>
     </main>
   );
@@ -196,6 +209,20 @@ function PermissionNotice({ text }: { text: string }) {
     <div className="panel permission">
       <strong>Read-only access</strong>
       <span>{text}</span>
+    </div>
+  );
+}
+
+function Pagination({ page, total, setPage }: { page: number; total: number; setPage: (page: number) => void }) {
+  const limit = 10;
+  const pages = Math.max(1, Math.ceil(total / limit));
+  return (
+    <div className="pagination">
+      <span>Page {page} of {pages} - {total} records</span>
+      <div className="actions">
+        <button className="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+        <button className="secondary" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button>
+      </div>
     </div>
   );
 }
@@ -253,7 +280,7 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans }: 
   );
 }
 
-function CustomersView({ user, customers, reload, setMessage }: { user: User; customers: Customer[]; reload: () => Promise<void>; setMessage: (value: string) => void }) {
+function CustomersView({ user, customers, page, total, setPage, reload, setMessage }: { user: User; customers: Customer[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void }) {
   const [form, setForm] = useState(blankCustomer);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -374,18 +401,31 @@ function CustomersView({ user, customers, reload, setMessage }: { user: User; cu
             <small>{customer.status} / {customer.type}{customer.followUpDate ? ` / Follow-up ${new Date(customer.followUpDate).toLocaleDateString()}` : ""}</small>
           </button>
         ))}
+        <Pagination page={page} total={total} setPage={setPage} />
         {selected && (
-          <div className="detail">
-            <h3>{selected.businessName}</h3>
-            <p>{selected.address}</p>
-            <p>{selected.notes}</p>
-            {can(user, ["ADMIN", "SALES"]) && <button className="secondary" onClick={() => beginEdit(selected)}>Edit Customer</button>}
+          <div className="detail detail-page">
+            <div className="section-heading">
+              <div>
+                <h3>{selected.businessName}</h3>
+                <p>{selected.name} - {selected.mobile} - {selected.email}</p>
+              </div>
+              {can(user, ["ADMIN", "SALES"]) && <button className="secondary" onClick={() => beginEdit(selected)}>Edit Customer</button>}
+            </div>
+            <div className="meta-grid">
+              <p><strong>Status</strong><br />{selected.status}</p>
+              <p><strong>Type</strong><br />{selected.type}</p>
+              <p><strong>GST</strong><br />{selected.gstNumber || "Not provided"}</p>
+              <p><strong>Follow-up</strong><br />{selected.followUpDate ? new Date(selected.followUpDate).toLocaleDateString() : "Not scheduled"}</p>
+            </div>
+            <p><strong>Address:</strong> {selected.address}</p>
+            {selected.notes && <p><strong>Notes:</strong> {selected.notes}</p>}
             {can(user, ["ADMIN", "SALES"]) && (
               <form onSubmit={addNote} className="inline-form">
                 <input placeholder="Follow-up note" value={note} onChange={(e) => setNote(e.target.value)} required />
                 <button>Add</button>
               </form>
             )}
+            <h3>Follow-up Timeline</h3>
             {selected.followUps?.map((item) => <p className="note" key={item.id}>{item.note}</p>)}
           </div>
         )}
@@ -394,7 +434,7 @@ function CustomersView({ user, customers, reload, setMessage }: { user: User; cu
   );
 }
 
-function ProductsView({ user, products, reload, setMessage }: { user: User; products: Product[]; reload: () => Promise<void>; setMessage: (value: string) => void }) {
+function ProductsView({ user, products, page, total, setPage, reload, setMessage }: { user: User; products: Product[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void }) {
   const [form, setForm] = useState(blankProduct);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
@@ -442,8 +482,11 @@ function ProductsView({ user, products, reload, setMessage }: { user: User; prod
   }
 
   async function selectProduct(product: Product) {
-    const detail = await api.get(`/products/${product.id}`);
-    setSelected(detail.data);
+    const [detail, movements] = await Promise.all([
+      api.get(`/products/${product.id}`),
+      api.get(`/products/${product.id}/movements`, { params: { page: 1, limit: 100 } })
+    ]);
+    setSelected({ ...detail.data, movements: movements.data.items });
   }
 
   async function saveMovement(event: FormEvent) {
@@ -506,11 +549,22 @@ function ProductsView({ user, products, reload, setMessage }: { user: User; prod
             {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="secondary" onClick={(event) => { event.stopPropagation(); beginEdit(product); }}>Edit</button>}
           </article>
         ))}
+        <Pagination page={page} total={total} setPage={setPage} />
         {selected && (
-          <div className="detail">
-            <h3>{selected.name}</h3>
-            <p>{selected.sku} - {selected.category} - {selected.location}</p>
-            <p>Current stock: <strong>{selected.currentStock}</strong></p>
+          <div className="detail detail-page">
+            <div className="section-heading">
+              <div>
+                <h3>{selected.name}</h3>
+                <p>{selected.sku} - {selected.category} - {selected.location}</p>
+              </div>
+              {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="secondary" onClick={() => beginEdit(selected)}>Edit Product</button>}
+            </div>
+            <div className="meta-grid">
+              <p><strong>Current Stock</strong><br />{selected.currentStock}</p>
+              <p><strong>Minimum Stock</strong><br />{selected.minimumStock}</p>
+              <p><strong>Unit Price</strong><br />{formatMoney(selected.unitPrice)}</p>
+              <p><strong>Alert</strong><br />{selected.currentStock <= selected.minimumStock ? "Low stock" : "Healthy"}</p>
+            </div>
             {can(user, ["ADMIN", "WAREHOUSE"]) && (
               <form className="inline-form" onSubmit={saveMovement}>
                 <select value={movement.type} onChange={(e) => setMovement({ ...movement, type: e.target.value as "IN" | "OUT" })}>
@@ -522,10 +576,23 @@ function ProductsView({ user, products, reload, setMessage }: { user: User; prod
                 <button>Record</button>
               </form>
             )}
-            <h3>Movement History</h3>
-            {(selected.movements ?? []).map((item) => (
-              <p className="note" key={item.id}>{item.type} {item.quantity} - {item.reason} - {item.createdBy?.name ?? "System"}</p>
-            ))}
+            <h3>Full Audit Trail</h3>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Type</th><th>Quantity</th><th>Reason</th><th>By</th><th>Date</th></tr></thead>
+                <tbody>
+                  {(selected.movements ?? []).map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.type}</td>
+                      <td>{item.quantity}</td>
+                      <td>{item.reason}</td>
+                      <td>{item.createdBy?.name ?? "System"}</td>
+                      <td>{new Date(item.createdAt).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
@@ -533,7 +600,7 @@ function ProductsView({ user, products, reload, setMessage }: { user: User; prod
   );
 }
 
-function ChallansView({ user, customers, products, challans, reload, setMessage }: { user: User; customers: Customer[]; products: Product[]; challans: Challan[]; reload: () => Promise<void>; setMessage: (value: string) => void }) {
+function ChallansView({ user, customers, products, challans, page, total, setPage, reload, setMessage }: { user: User; customers: Customer[]; products: Product[]; challans: Challan[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void }) {
   const [customerId, setCustomerId] = useState("");
   const [status, setStatus] = useState<"DRAFT" | "CONFIRMED">("DRAFT");
   const [notes, setNotes] = useState("");
@@ -641,6 +708,20 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
     popup.print();
   }
 
+  async function downloadServerPdf(challan: Challan) {
+    try {
+      const response = await api.get(`/challans/${challan.id}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${challan.challanNumber}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
+
   return (
     <section className="two-column">
       {can(user, ["ADMIN", "SALES"]) && (
@@ -686,6 +767,7 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
             )}
           </article>
         ))}
+        <Pagination page={page} total={total} setPage={setPage} />
         {lines.some((line) => line.productId) && (
           <p className="muted">Selected stock: {lines.map((line) => productMap.get(line.productId)?.currentStock ?? "-").join(", ")}</p>
         )}
@@ -696,7 +778,10 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
                 <h3>{detail.challanNumber}</h3>
                 <p>{detail.customer.businessName} - {detail.status}</p>
               </div>
-              <button className="secondary" onClick={() => printChallan(detail)}>Print / Export PDF</button>
+              <div className="actions">
+                <button className="secondary" onClick={() => printChallan(detail)}>Browser Print</button>
+                <button className="secondary" onClick={() => downloadServerPdf(detail)}>Download PDF</button>
+              </div>
             </div>
             <div className="meta-grid">
               <p><strong>Total Qty</strong><br />{detail.totalQuantity}</p>
@@ -735,7 +820,7 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
   );
 }
 
-function UsersView({ currentUser, users, reload, setMessage }: { currentUser: User; users: User[]; reload: () => Promise<void>; setMessage: (value: string) => void }) {
+function UsersView({ currentUser, users, page, total, setPage, reload, setMessage }: { currentUser: User; users: User[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void }) {
   const [form, setForm] = useState(blankUser);
 
   async function save(event: FormEvent) {
@@ -806,6 +891,7 @@ function UsersView({ currentUser, users, reload, setMessage }: { currentUser: Us
             </button>
           </article>
         ))}
+        <Pagination page={page} total={total} setPage={setPage} />
       </div>
     </section>
   );
