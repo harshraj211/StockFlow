@@ -191,6 +191,18 @@ p {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.dashboard-stack {
+  display: grid;
+  gap: 20px;
+}
+
+.dashboard-grid {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .metric,
 .panel {
   background: #fff;
@@ -207,6 +219,11 @@ p {
 
 .metric strong {
   font-size: 40px;
+}
+
+.metric small {
+  color: #667085;
+  font-weight: 700;
 }
 
 .two-column {
@@ -235,6 +252,10 @@ p {
   overflow: auto;
 }
 
+.compact-list {
+  max-height: 420px;
+}
+
 .row {
   background: #f9fbfd;
   border: 1px solid #e1e7ef;
@@ -244,6 +265,16 @@ p {
   justify-items: start;
   text-align: left;
   width: 100%;
+}
+
+.user-row {
+  align-items: center;
+  grid-template-columns: 1fr 180px auto auto;
+}
+
+.user-row div {
+  display: grid;
+  gap: 5px;
 }
 
 .row small,
@@ -286,9 +317,21 @@ p {
   padding: 10px;
 }
 
+.total-preview {
+  align-items: center;
+  background: #eef7f4;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 12px;
+}
+
 @media (max-width: 920px) {
   .app-shell,
-  .two-column {
+  .two-column,
+  .dashboard-grid,
+  .user-row {
     grid-template-columns: 1fr;
   }
 
