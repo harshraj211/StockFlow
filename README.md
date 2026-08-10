@@ -12,14 +12,14 @@ Full-stack case study for a wholesale/distribution business. The app covers auth
 
 ## Key Backend Features & Enhancements
 
-- 🔐 **JWT Authentication & RBAC**: Roles (`ADMIN`, `SALES`, `WAREHOUSE`, `ACCOUNTS`) with granular endpoint protection and user account activation control (`isActive`).
-- 🛡️ **Security & Rate Limiting**: Built-in rate limiting on `/auth/login` (20 req/15min) and Helmet HTTP security headers.
-- 🩺 **Health Check API**: `GET /health` conducts a live database ping check (`SELECT 1`).
-- 📊 **Executive Dashboard KPIs**: `GET /dashboard/stats` provides total revenue, active/lead customer breakdowns, low-stock inventory items, upcoming follow-ups, and recent sales challans.
-- 👥 **Customer CRM Module**: Full CRUD, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
-- 📦 **Product & Inventory Module**: Product management with SKU uniqueness enforcement, category/location tracking, stock level warnings, and full stock movement audit logging (`IN` / `OUT` with reason & user attribution).
-- 📜 **Sales Challan Engine**: Multi-product challan creation (Draft or Confirmed), auto-generated sequential numbers (`CH-2026-00001`), snapshotting of product details (name, SKU, unit price), total amount computation, and atomic database transactions ensuring stock never drops below zero.
-- 👤 **Admin User Management**: `ADMIN` role can list users, register new team members, adjust roles, and activate/deactivate accounts.
+- **JWT Authentication & RBAC**: Roles (`ADMIN`, `SALES`, `WAREHOUSE`, `ACCOUNTS`) with granular endpoint protection and user account activation control (`isActive`).
+- **Security & Rate Limiting**: Built-in rate limiting on `/auth/login` (20 req/15min) and Helmet HTTP security headers.
+- **Health Check API**: `GET /health` conducts a live database ping check (`SELECT 1`).
+- **Executive Dashboard KPIs**: `GET /dashboard/stats` provides total revenue, active/lead customer breakdowns, low-stock inventory items, upcoming follow-ups, and recent sales challans.
+- **Customer CRM Module**: Full CRUD, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
+- **Product & Inventory Module**: Product management with SKU uniqueness enforcement, category/location tracking, stock level warnings, and full stock movement audit logging (`IN` / `OUT` with reason & user attribution).
+- **Sales Challan Engine**: Multi-product challan creation (Draft or Confirmed), auto-generated sequential numbers (`CH-2026-00001`), snapshotting of product details (name, SKU, unit price), total amount computation, and atomic database transactions ensuring stock never drops below zero.
+- **Admin User Management**: `ADMIN` role can list users, register new team members, adjust roles, and activate/deactivate accounts.
 
 ---
 
@@ -28,7 +28,7 @@ Full-stack case study for a wholesale/distribution business. The app covers auth
 All seeded accounts use the password: `Password@123`
 
 | Role | Email | Permissions |
-| --- | --- | --- |
+| -- | -- | -- |
 | **Admin** | `admin@fundsroom.test` | Full operational access + user management |
 | **Sales** | `sales@fundsroom.test` | Manage customers, follow-up notes, create/edit challans |
 | **Warehouse** | `warehouse@fundsroom.test` | Manage products & execute stock movements |
@@ -127,9 +127,7 @@ All endpoints (except `/auth/login` and `/health`) require:
 
 ## Postman Collection
 
-A complete, production-ready Postman collection is included in `postman/Mini_ERP_CRM.postman_collection.json`.
-
-**Features of the Postman Collection:**
+A complete, production-ready Postman collection is included in `postman/Mini_ERP_CRM.postman_collection.json`. **Features of the Postman Collection:**
 - **Auto-Token Capture**: Logging in as any user automatically sets the `{{token}}` collection variable for all subsequent requests.
 - **Auto-ID Capture**: Creating a customer, product, or challan automatically populates `{{customerId}}`, `{{productId}}`, and `{{challanId}}`.
 - **Negative & Role Validation Tests**: Includes test cases for insufficient stock errors, invalid credentials, and non-admin permission denials (403).
