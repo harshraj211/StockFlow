@@ -97,3 +97,7 @@ export function errorMessage(error: unknown) {
   }
   return "Something went wrong";
 }
+
+export function isNetworkError(error: unknown) {
+  return axios.isAxiosError(error) && !error.response;
+}
