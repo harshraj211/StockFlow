@@ -6,7 +6,7 @@ import { asyncHandler } from "../http.js";
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
 
-// GET /dashboard/stats — aggregate KPIs for the dashboard
+// GET /dashboard/stats  aggregate KPIs for the dashboard
 dashboardRouter.get(
   "/stats",
   asyncHandler(async (_req, res) => {
