@@ -20,6 +20,7 @@ export const customerSchema = z.object({
   type: z.enum(["RETAIL", "WHOLESALE", "DISTRIBUTOR"]),
   address: z.string().min(3, "Address must be at least 3 characters"),
   status: z.enum(["LEAD", "ACTIVE", "INACTIVE"]),
+  priority: z.enum(["HOT", "WARM", "COLD"]).default("WARM"),
   followUpDate: z.string().datetime().optional().nullable(),
   notes: z.string().optional().nullable()
 });
