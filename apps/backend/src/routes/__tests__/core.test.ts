@@ -1,0 +1,127 @@
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import request from "supertest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
+process.env.JWT_SECRET = "test-secret";
+process.env.FRONTEND_URL = "http://localhost:5173";
+
+const prismaMock = {
+  user: {
+    findUnique: vi.fn()
+  },
+  product: {
+    findUnique: vi.fn()
+  },
+  salesChallan: {
+    count: vi.fn()
+  },
+  customer: {
+    count: vi.fn(),
+    findMany: vi.fn()
+  },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn()
+};
+
+vi.mock("../../db.js", () => ({ prisma: prismaMock }));
+
+const { app } = await import("../../app.js");
+
+function token(role = "ADMIN") {
+  return jwt.sign(
+    { id: "user-1", email: "admin@test.local", name: "Admin", role },
+    process.env.JWT_SECRET!
+  );
+}
+
+describe("core API behavior", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("logs in with valid credentials", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: "user-1",
+      name: "Admin",
+      email: "admin@test.local",
+      role: "ADMIN",
+      isActive: true,
+      passwordHash: await bcrypt.hash("Password@123", 10)
+    });
+
+    const res = await request(app)
+      .post("/auth/login")
+      .send({ email: "admin@test.local", password: "Password@123" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeTruthy();
+    expect(res.body.user.role).toBe("ADMIN");
+  });
+
+  it("prevents non-admin users from creating users", async () => {
+    const res = await request(app)
+      .post("/users")
+      .set("Authorization", `Bearer ${token("SALES")}`)
+      .send({ name: "New User", email: "new@test.local", password: "Password@123", role: "SALES" });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("prevents manual OUT movement from making stock negative", async () => {
+    prismaMock.product.findUnique.mockResolvedValue({
+      id: "product-1",
+      name: "Cable",
+      currentStock: 3
+    });
+
+    const res = await request(app)
+      .post("/products/product-1/movements")
+      .set("Authorization", `Bearer ${token("WAREHOUSE")}`)
+      .send({ type: "OUT", quantity: 5, reason: "Adjustment" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("Insufficient stock");
+  });
+
+  it("confirming a challan reduces stock and writes stock movement", async () => {
+    const productUpdate = vi.fn();
+    const movementCreate = vi.fn();
+    const challanUpdate = vi.fn().mockResolvedValue({ id: "challan-1", status: "CONFIRMED" });
+
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback({
+        salesChallan: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "challan-1",
+            challanNumber: "CH-2026-00001",
+            status: "DRAFT",
+            items: [{ productId: "product-1", productName: "Cable", quantity: 2 }]
+          }),
+          update: challanUpdate
+        },
+        product: {
+          findUnique: vi.fn().mockResolvedValue({ id: "product-1", name: "Cable", currentStock: 10 }),
+          update: productUpdate
+        },
+        stockMovement: {
+          create: movementCreate
+        }
+      })
+    );
+
+    const res = await request(app)
+      .patch("/challans/challan-1/status")
+      .set("Authorization", `Bearer ${token("ACCOUNTS")}`)
+      .send({ status: "CONFIRMED" });
+
+    expect(res.status).toBe(200);
+    expect(productUpdate).toHaveBeenCalledWith({
+      where: { id: "product-1" },
+      data: { currentStock: { decrement: 2 } }
+    });
+    expect(movementCreate).toHaveBeenCalled();
+    expect(challanUpdate).toHaveBeenCalled();
+  });
+});
