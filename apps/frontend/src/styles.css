@@ -98,6 +98,22 @@ a {
   font-weight: 700;
 }
 
+.link-button {
+  background: transparent;
+  border: 0;
+  color: #0b66b7;
+  font-size: 13px;
+  font-weight: 800;
+  min-height: auto;
+  padding: 0;
+}
+
+.link-button:hover {
+  background: transparent;
+  color: #084d8a;
+  text-decoration: underline;
+}
+
 .login-screen {
   align-items: center;
   background: #f6f8fb;
@@ -168,6 +184,33 @@ a {
   display: grid;
   grid-template-columns: 220px 1fr;
   min-height: 100vh;
+}
+
+.app-shell.sidebar-compact {
+  grid-template-columns: 76px 1fr;
+}
+
+.sidebar-compact .brand div,
+.sidebar-compact .quick-actions span,
+.sidebar-compact .role-card div,
+.sidebar-compact .copyright {
+  display: none;
+}
+
+.sidebar-compact .brand,
+.sidebar-compact .sidebar button,
+.sidebar-compact .role-card {
+  justify-content: center;
+}
+
+.sidebar-compact .sidebar button {
+  font-size: 0;
+  padding: 8px;
+}
+
+.sidebar-compact .sidebar button svg {
+  height: 20px;
+  width: 20px;
 }
 
 .sidebar {
@@ -318,6 +361,74 @@ a {
   text-align: center;
   top: 2px;
   width: 16px;
+}
+
+.notification-wrap {
+  position: relative;
+}
+
+.notification-panel {
+  background: #fff;
+  border: 1px solid #dfe5ee;
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, .14);
+  display: grid;
+  gap: 8px;
+  max-height: 440px;
+  overflow: auto;
+  padding: 12px;
+  position: absolute;
+  right: 0;
+  top: 46px;
+  width: 360px;
+  z-index: 20;
+}
+
+.notification-head {
+  align-items: center;
+  border-bottom: 1px solid #e1e7ef;
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 8px;
+}
+
+.notification-item {
+  align-items: flex-start;
+  background: #fbfcfe;
+  border-color: #e1e7ef;
+  color: #172033;
+  display: grid;
+  gap: 4px;
+  justify-content: stretch;
+  text-align: left;
+}
+
+.notification-item:hover {
+  background: #f2faf8;
+  color: #172033;
+}
+
+.notification-item strong,
+.notification-item span {
+  display: block;
+}
+
+.notification-item span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.notification-item.danger {
+  border-left: 3px solid #d92d20;
+}
+
+.notification-item.warning {
+  border-left: 3px solid #f79009;
+}
+
+.notification-item.info {
+  border-left: 3px solid #1570ef;
 }
 
 .search {
