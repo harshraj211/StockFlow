@@ -88,6 +88,7 @@ describe("core API behavior", () => {
   it("confirming a challan reduces stock and writes stock movement", async () => {
     const productUpdate = vi.fn();
     const movementCreate = vi.fn();
+    const historyCreate = vi.fn();
     const challanUpdate = vi.fn().mockResolvedValue({ id: "challan-1", status: "CONFIRMED" });
 
     prismaMock.$transaction.mockImplementation(async (callback) =>
@@ -99,6 +100,7 @@ describe("core API behavior", () => {
             status: "DRAFT",
             items: [{ productId: "product-1", productName: "Cable", quantity: 2 }]
           }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({ id: "challan-1", status: "CONFIRMED" }),
           update: challanUpdate
         },
         product: {
@@ -107,6 +109,9 @@ describe("core API behavior", () => {
         },
         stockMovement: {
           create: movementCreate
+        },
+        challanStatusHistory: {
+          create: historyCreate
         }
       })
     );
@@ -122,6 +127,15 @@ describe("core API behavior", () => {
       data: { currentStock: { decrement: 2 } }
     });
     expect(movementCreate).toHaveBeenCalled();
+    expect(historyCreate).toHaveBeenCalledWith({
+      data: {
+        challanId: "challan-1",
+        fromStatus: "DRAFT",
+        toStatus: "CONFIRMED",
+        note: "Stock deducted successfully during confirmation",
+        changedById: "user-1"
+      }
+    });
     expect(challanUpdate).toHaveBeenCalled();
   });
 });
