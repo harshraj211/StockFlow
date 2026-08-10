@@ -6,10 +6,32 @@ import { asyncHandler } from "../http.js";
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
 
+function periodStart(period: unknown) {
+  const now = new Date();
+  const start = new Date(now);
+  if (period === "today") {
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+  if (period === "week") {
+    const day = start.getDay();
+    const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+    start.setDate(diff);
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+  start.setDate(1);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
 // GET /dashboard/stats  aggregate KPIs for the dashboard
 dashboardRouter.get(
   "/stats",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const startDate = periodStart(req.query.period);
+    const challanPeriodWhere = { createdAt: { gte: startDate } };
+    const confirmedPeriodWhere = { status: "CONFIRMED" as const, confirmedAt: { gte: startDate } };
     const [
       totalCustomers,
       activeCustomers,
@@ -23,6 +45,7 @@ dashboardRouter.get(
       revenueResult,
       recentChallans,
       lowStockList,
+      stockHealth,
       upcomingFollowUps
     ] = await Promise.all([
       prisma.customer.count(),
@@ -30,13 +53,13 @@ dashboardRouter.get(
       prisma.customer.count({ where: { status: "LEAD" } }),
       prisma.customer.count({ where: { status: "INACTIVE" } }),
       prisma.product.count(),
-      prisma.salesChallan.count(),
-      prisma.salesChallan.count({ where: { status: "DRAFT" } }),
-      prisma.salesChallan.count({ where: { status: "CONFIRMED" } }),
-      prisma.salesChallan.count({ where: { status: "CANCELLED" } }),
+      prisma.salesChallan.count({ where: challanPeriodWhere }),
+      prisma.salesChallan.count({ where: { ...challanPeriodWhere, status: "DRAFT" } }),
+      prisma.salesChallan.count({ where: { ...challanPeriodWhere, status: "CONFIRMED" } }),
+      prisma.salesChallan.count({ where: { ...challanPeriodWhere, status: "CANCELLED" } }),
       prisma.salesChallan.aggregate({
         _sum: { totalAmount: true },
-        where: { status: "CONFIRMED" }
+        where: confirmedPeriodWhere
       }),
       prisma.salesChallan.findMany({
         take: 5,
@@ -64,6 +87,13 @@ dashboardRouter.get(
         ORDER BY "currentStock" ASC
         LIMIT 10
       `,
+      prisma.$queryRaw<Array<{ healthy: bigint; low: bigint; out: bigint }>>`
+        SELECT
+          COUNT(*) FILTER (WHERE "currentStock" > "minimumStock") AS healthy,
+          COUNT(*) FILTER (WHERE "currentStock" <= "minimumStock" AND "currentStock" > 0) AS low,
+          COUNT(*) FILTER (WHERE "currentStock" = 0) AS out
+        FROM "Product"
+      `,
       prisma.customer.findMany({
         where: {
           followUpDate: {
@@ -79,6 +109,7 @@ dashboardRouter.get(
           businessName: true,
           followUpDate: true,
           status: true,
+          priority: true,
           mobile: true
         }
       })
@@ -93,7 +124,9 @@ dashboardRouter.get(
       },
       products: {
         total: totalProducts,
-        lowStock: lowStockList.length
+        healthyStock: Number(stockHealth[0]?.healthy ?? 0),
+        lowStock: Number(stockHealth[0]?.low ?? 0),
+        outOfStock: Number(stockHealth[0]?.out ?? 0)
       },
       challans: {
         total: totalChallans,
