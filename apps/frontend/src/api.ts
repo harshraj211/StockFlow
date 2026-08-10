@@ -36,6 +36,17 @@ export type Product = {
   currentStock: number;
   minimumStock: number;
   location: string;
+  movements?: StockMovement[];
+};
+
+export type StockMovement = {
+  id: string;
+  productId: string;
+  quantity: number;
+  type: "IN" | "OUT";
+  reason: string;
+  createdAt: string;
+  createdBy?: { name: string; role: Role };
 };
 
 export type Challan = {
@@ -48,6 +59,7 @@ export type Challan = {
   status: "DRAFT" | "CONFIRMED" | "CANCELLED";
   createdAt: string;
   confirmedAt?: string | null;
+  createdBy?: { id?: string; name: string; role: Role };
   items: Array<{
     id: string;
     productName: string;
