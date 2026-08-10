@@ -3,7 +3,7 @@ import { ActivityEntityType, MovementType, Role } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
 import { asyncHandler, HttpError, routeParam } from "../http.js";
-import { paginationQuery, productSchema, stockMovementSchema } from "../validators.js";
+import { paginationQuery, productListQuery, productSchema, stockMovementSchema } from "../validators.js";
 import { logActivity } from "../activity.js";
 
 export const productRouter = Router();
@@ -13,17 +13,32 @@ productRouter.use(requireAuth);
 productRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const query = paginationQuery.parse(req.query);
-    const where = query.search
-      ? {
-          OR: [
-            { name: { contains: query.search, mode: "insensitive" as const } },
-            { sku: { contains: query.search, mode: "insensitive" as const } },
-            { category: { contains: query.search, mode: "insensitive" as const } },
-            { location: { contains: query.search, mode: "insensitive" as const } }
-          ]
-        }
-      : {};
+    const query = productListQuery.parse(req.query);
+    let stockFilteredIds: string[] | undefined;
+    if (query.stockState) {
+      const stockRows =
+        query.stockState === "HEALTHY"
+          ? await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Product" WHERE "currentStock" > "minimumStock"`
+          : query.stockState === "LOW"
+            ? await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Product" WHERE "currentStock" <= "minimumStock" AND "currentStock" > 0`
+            : await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Product" WHERE "currentStock" = 0`;
+      stockFilteredIds = stockRows.map((row) => row.id);
+    }
+    const where = {
+      ...(query.search
+        ? {
+            OR: [
+              { name: { contains: query.search, mode: "insensitive" as const } },
+              { sku: { contains: query.search, mode: "insensitive" as const } },
+              { category: { contains: query.search, mode: "insensitive" as const } },
+              { location: { contains: query.search, mode: "insensitive" as const } }
+            ]
+          }
+        : {}),
+      ...(query.category ? { category: query.category } : {}),
+      ...(query.location ? { location: query.location } : {}),
+      ...(stockFilteredIds ? { id: { in: stockFilteredIds } } : {})
+    };
     const [items, total] = await Promise.all([
       prisma.product.findMany({
         where,
