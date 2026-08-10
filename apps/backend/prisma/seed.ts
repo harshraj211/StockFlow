@@ -4,10 +4,10 @@ import { PrismaClient, Role } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Seeding database...");
+  console.log("Seeding database...");
   const passwordHash = await bcrypt.hash("Password@123", 10);
 
-  // ── Users ──────────────────────────────────────────────────────────────
+  // Users
   const users = [
     { name: "Admin User", email: "admin@fundsroom.test", role: Role.ADMIN },
     { name: "Sales User", email: "sales@fundsroom.test", role: Role.SALES },
@@ -25,9 +25,9 @@ async function main() {
 
   const admin = await prisma.user.findUniqueOrThrow({ where: { email: "admin@fundsroom.test" } });
   const sales = await prisma.user.findUniqueOrThrow({ where: { email: "sales@fundsroom.test" } });
-  console.log("✓ Users seeded");
+  console.log("Users seeded");
 
-  // ── Customers ──────────────────────────────────────────────────────────
+  // Customers
   const customerSeed = [
     {
       id: "seed-customer-1",
@@ -79,7 +79,7 @@ async function main() {
       address: "MG Road, Kochi, Kerala - 682016",
       status: "ACTIVE" as const,
       followUpDate: null,
-      notes: "Regular buyer. Credit limit: ₹5,00,000."
+      notes: "Regular buyer. Credit limit: 5,00,000."
     },
     {
       id: "seed-customer-5",
@@ -103,9 +103,9 @@ async function main() {
       create: { ...c, createdById: admin.id }
     });
   }
-  console.log("✓ Customers seeded");
+  console.log("Customers seeded");
 
-  // ── Products ───────────────────────────────────────────────────────────
+  // Products
   const productSeed = [
     {
       sku: "SKU-LED-9W",
@@ -181,9 +181,9 @@ async function main() {
     });
     createdProducts[p.sku] = product.id;
   }
-  console.log("✓ Products seeded");
+  console.log("Products seeded");
 
-  // ── Follow-up Notes ────────────────────────────────────────────────────
+  // Follow-up Notes
   await prisma.followUpNote.upsert({
     where: { id: "seed-note-1" },
     update: {},
@@ -204,9 +204,9 @@ async function main() {
       createdById: sales.id
     }
   });
-  console.log("✓ Follow-up notes seeded");
+  console.log("Follow-up notes seeded");
 
-  // ── Challans ───────────────────────────────────────────────────────────
+  // Challans
   const ch1Items = [
     { sku: "SKU-LED-9W", qty: 50 },
     { sku: "SKU-MCB-32A", qty: 10 }
@@ -278,9 +278,9 @@ async function main() {
       }
     }
   });
-  console.log("✓ Challans seeded");
+  console.log("Challans seeded");
 
-  console.log("\n✅ Seed complete. Login password for all roles: Password@123");
+  console.log("\nSeed complete. Login password for all roles: Password@123");
   console.log("   admin@fundsroom.test | sales@fundsroom.test | warehouse@fundsroom.test | accounts@fundsroom.test");
 }
 
