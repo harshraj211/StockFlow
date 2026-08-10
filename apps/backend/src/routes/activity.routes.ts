@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { asyncHandler } from "../http.js";
-import { paginationQuery } from "../validators.js";
+import { activityListQuery } from "../validators.js";
 
 export const activityRouter = Router();
 activityRouter.use(requireAuth);
@@ -10,16 +10,19 @@ activityRouter.use(requireAuth);
 activityRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const query = paginationQuery.parse(req.query);
-    const where = query.search
-      ? {
-          OR: [
-            { action: { contains: query.search, mode: "insensitive" as const } },
-            { title: { contains: query.search, mode: "insensitive" as const } },
-            { details: { contains: query.search, mode: "insensitive" as const } }
-          ]
-        }
-      : {};
+    const query = activityListQuery.parse(req.query);
+    const where = {
+      ...(query.search
+        ? {
+            OR: [
+              { action: { contains: query.search, mode: "insensitive" as const } },
+              { title: { contains: query.search, mode: "insensitive" as const } },
+              { details: { contains: query.search, mode: "insensitive" as const } }
+            ]
+          }
+        : {}),
+      ...(query.entityType ? { entityType: query.entityType } : {})
+    };
     const [items, total] = await Promise.all([
       prisma.activityLog.findMany({
         where,
