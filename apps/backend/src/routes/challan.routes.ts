@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { ChallanStatus, MovementType, Role } from "@prisma/client";
+import PDFDocument from "pdfkit";
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
 import { asyncHandler, HttpError, routeParam } from "../http.js";
@@ -188,6 +189,78 @@ challanRouter.get(
     });
     if (!challan) throw new HttpError(404, "Challan not found");
     return res.json(challan);
+  })
+);
+
+// GET /challans/:id/pdf  server-generated challan PDF
+challanRouter.get(
+  "/:id/pdf",
+  asyncHandler(async (req, res) => {
+    const id = routeParam(req.params.id, "id");
+    const challan = await prisma.salesChallan.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        items: true,
+        createdBy: { select: { name: true, role: true } }
+      }
+    });
+    if (!challan) throw new HttpError(404, "Challan not found");
+
+    const doc = new PDFDocument({ margin: 42, size: "A4" });
+    const filename = `${challan.challanNumber}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    doc.fontSize(20).text("Sales Challan", { align: "left" });
+    doc.fontSize(11).fillColor("#555").text(`${challan.challanNumber} - ${challan.status}`);
+    doc.moveDown();
+
+    doc.fillColor("#111").fontSize(12).text("Customer", { underline: true });
+    doc.text(challan.customer.businessName);
+    doc.text(`${challan.customer.name} - ${challan.customer.mobile}`);
+    doc.text(challan.customer.address);
+    doc.moveDown();
+
+    doc.text(`Created: ${challan.createdAt.toLocaleString()}`);
+    doc.text(`Created by: ${challan.createdBy.name} (${challan.createdBy.role})`);
+    if (challan.confirmedAt) doc.text(`Confirmed: ${challan.confirmedAt.toLocaleString()}`);
+    if (challan.notes) doc.text(`Notes: ${challan.notes}`);
+    doc.moveDown();
+
+    const startY = doc.y + 8;
+    const columns = [42, 76, 260, 350, 410, 480];
+    doc.fontSize(10).font("Helvetica-Bold");
+    doc.text("#", columns[0], startY);
+    doc.text("Product", columns[1], startY);
+    doc.text("Location", columns[2], startY);
+    doc.text("Qty", columns[3], startY);
+    doc.text("Rate", columns[4], startY);
+    doc.text("Amount", columns[5], startY);
+    doc.moveTo(42, startY + 16).lineTo(552, startY + 16).stroke();
+
+    doc.font("Helvetica");
+    let y = startY + 26;
+    challan.items.forEach((item, index) => {
+      const amount = Number(item.unitPrice) * item.quantity;
+      if (y > 730) {
+        doc.addPage();
+        y = 42;
+      }
+      doc.text(String(index + 1), columns[0], y);
+      doc.text(`${item.productName}\n${item.sku} - ${item.category}`, columns[1], y, { width: 170 });
+      doc.text(item.location, columns[2], y, { width: 80 });
+      doc.text(String(item.quantity), columns[3], y);
+      doc.text(Number(item.unitPrice).toFixed(2), columns[4], y);
+      doc.text(amount.toFixed(2), columns[5], y);
+      y += 42;
+    });
+
+    doc.moveTo(42, y).lineTo(552, y).stroke();
+    doc.font("Helvetica-Bold").fontSize(13).text(`Total Quantity: ${challan.totalQuantity}`, 330, y + 16);
+    doc.text(`Total Amount: Rs. ${Number(challan.totalAmount).toFixed(2)}`, 330, y + 36);
+    doc.end();
   })
 );
 
