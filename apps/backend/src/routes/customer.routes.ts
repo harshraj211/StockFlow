@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { CustomerStatus, CustomerType, Role } from "@prisma/client";
+import { ActivityEntityType, CustomerPriority, CustomerStatus, CustomerType, Role } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
 import { asyncHandler, HttpError, routeParam } from "../http.js";
 import { customerSchema, followUpSchema, paginationQuery } from "../validators.js";
+import { logActivity } from "../activity.js";
 
 export const customerRouter = Router();
 customerRouter.use(requireAuth);
@@ -48,8 +49,17 @@ customerRouter.post(
         followUpDate: body.followUpDate ? new Date(body.followUpDate) : null,
         type: body.type as CustomerType,
         status: body.status as CustomerStatus,
+        priority: body.priority as CustomerPriority,
         createdById: req.user!.id
       }
+    });
+    await logActivity({
+      action: "CUSTOMER_CREATED",
+      entityType: ActivityEntityType.CUSTOMER,
+      entityId: customer.id,
+      title: `${customer.businessName} added to CRM`,
+      details: `Status ${customer.status}, priority ${customer.priority}`,
+      createdById: req.user!.id
     });
     return res.status(201).json(customer);
   })
@@ -80,8 +90,17 @@ customerRouter.put(
         ...body,
         gstNumber: body.gstNumber || null,
         notes: body.notes || null,
+        priority: body.priority as CustomerPriority,
         followUpDate: body.followUpDate ? new Date(body.followUpDate) : null
       }
+    });
+    await logActivity({
+      action: "CUSTOMER_UPDATED",
+      entityType: ActivityEntityType.CUSTOMER,
+      entityId: customer.id,
+      title: `${customer.businessName} customer record updated`,
+      details: `Status ${customer.status}, priority ${customer.priority}`,
+      createdById: req.user!.id
     });
     return res.json(customer);
   })
@@ -97,6 +116,14 @@ customerRouter.post(
     if (!customer) throw new HttpError(404, "Customer not found");
     const note = await prisma.followUpNote.create({
       data: { customerId: id, note: body.note, createdById: req.user!.id }
+    });
+    await logActivity({
+      action: "FOLLOW_UP_ADDED",
+      entityType: ActivityEntityType.CUSTOMER,
+      entityId: id,
+      title: "Customer follow-up note added",
+      details: body.note,
+      createdById: req.user!.id
     });
     return res.status(201).json(note);
   })
