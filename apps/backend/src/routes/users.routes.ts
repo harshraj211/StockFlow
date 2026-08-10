@@ -10,7 +10,7 @@ export const usersRouter = Router();
 usersRouter.use(requireAuth);
 usersRouter.use(requireRoles(Role.ADMIN));
 
-// GET /users — list all users (admin only)
+// GET /users  list all users (admin only)
 usersRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -37,7 +37,7 @@ usersRouter.get(
   })
 );
 
-// POST /users — create user (admin only)
+// POST /users  create user (admin only)
 usersRouter.post(
   "/",
   asyncHandler(async (req, res) => {
@@ -59,7 +59,7 @@ usersRouter.post(
   })
 );
 
-// PUT /users/:id — update name / role (admin only)
+// PUT /users/:id  update name / role (admin only)
 usersRouter.put(
   "/:id",
   asyncHandler(async (req, res) => {
@@ -82,7 +82,7 @@ usersRouter.put(
   })
 );
 
-// PATCH /users/:id/deactivate — soft-delete (admin only)
+// PATCH /users/:id/deactivate  soft-delete (admin only)
 usersRouter.patch(
   "/:id/deactivate",
   asyncHandler(async (req, res) => {
@@ -101,7 +101,7 @@ usersRouter.patch(
   })
 );
 
-// PATCH /users/:id/activate — re-activate (admin only)
+// PATCH /users/:id/activate  re-activate (admin only)
 usersRouter.patch(
   "/:id/activate",
   asyncHandler(async (req, res) => {
