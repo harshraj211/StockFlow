@@ -20,7 +20,7 @@ Full-stack case study for a wholesale/distribution business. The app covers auth
 - **Product & Inventory Module**: Product management with SKU uniqueness enforcement, category/location tracking, stock level warnings, and full stock movement audit logging (`IN` / `OUT` with reason & user attribution).
 - **Sales Challan Engine**: Multi-product challan creation (Draft or Confirmed), auto-generated sequential numbers (`CH-2026-00001`), snapshotting of product details (name, SKU, unit price), total amount computation, and atomic database transactions ensuring stock never drops below zero.
 - **Admin User Management**: `ADMIN` role can list users, register new team members, adjust roles, and activate/deactivate accounts.
-- **Operational UI Polish**: Customer/product edit flows, product filters, low-stock-only view, manual stock movement entry, challan detail view, print/PDF export flow, and role-aware read-only states.
+- **Operational UI Polish**: Customer/product edit flows, full customer detail panel, product filters, low-stock-only view, manual stock movement entry, product movement audit trail, challan detail view, browser print flow, server-generated PDF download, pagination controls, and role-aware read-only states.
 - **Backend Test Coverage**: Tests cover login, role denial, negative stock prevention, and challan confirmation stock deduction.
 
 ---
@@ -122,6 +122,7 @@ All endpoints (except `/auth/login` and `/health`) require:
 - `GET   /challans` - List sales challans (supports `page`, `limit`, `search`)
 - `POST  /challans` - Create challan (Draft or Confirmed) (`ADMIN`, `SALES`)
 - `GET   /challans/:id` - View complete challan details with item snapshots
+- `GET   /challans/:id/pdf` - Download server-generated challan PDF
 - `PATCH /challans/:id/notes` - Update notes on draft challan (`ADMIN`, `SALES`)
 - `PATCH /challans/:id/status` - Change status to `CONFIRMED` or `CANCELLED` (`ADMIN`, `SALES`, `ACCOUNTS`)
 
@@ -155,9 +156,10 @@ A complete, production-ready Postman collection is included in `postman/Mini_ERP
 
 ### Frontend (`apps/frontend`)
 - Dashboard: Revenue KPIs, low-stock alerts, upcoming follow-ups, and recent challans.
-- Customers: Add/edit customers, follow-up filters, detail view, and follow-up notes.
-- Products: Add/edit products, category/location/low-stock filters, manual stock movement, and movement history.
-- Challans: Create draft/confirmed challans, detail view, draft notes, confirm/cancel actions, and print/PDF export.
+- Customers: Add/edit customers, follow-up filters, full detail view, and follow-up notes.
+- Products: Add/edit products, category/location/low-stock filters, manual stock movement, and audit history.
+- Challans: Create draft/confirmed challans, detail view, draft notes, confirm/cancel actions, browser print, and server PDF download.
+- Lists: API-backed pagination controls on customer, product, challan, and user lists.
 - Users: Admin-only user creation, role updates, activation, and deactivation.
 
 ---
