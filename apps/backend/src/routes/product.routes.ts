@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { MovementType, Role } from "@prisma/client";
+import { ActivityEntityType, MovementType, Role } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
 import { asyncHandler, HttpError, routeParam } from "../http.js";
 import { paginationQuery, productSchema, stockMovementSchema } from "../validators.js";
+import { logActivity } from "../activity.js";
 
 export const productRouter = Router();
 productRouter.use(requireAuth);
@@ -45,6 +46,14 @@ productRouter.post(
     const existing = await prisma.product.findUnique({ where: { sku: body.sku } });
     if (existing) throw new HttpError(409, `A product with SKU "${body.sku}" already exists`);
     const product = await prisma.product.create({ data: body });
+    await logActivity({
+      action: "PRODUCT_CREATED",
+      entityType: ActivityEntityType.PRODUCT,
+      entityId: product.id,
+      title: `${product.name} added to inventory`,
+      details: `${product.sku} at ${product.location}`,
+      createdById: req.user!.id
+    });
     return res.status(201).json(product);
   })
 );
@@ -85,6 +94,14 @@ productRouter.put(
       if (conflict) throw new HttpError(409, `A product with SKU "${body.sku}" already exists`);
     }
     const updated = await prisma.product.update({ where: { id }, data: body });
+    await logActivity({
+      action: "PRODUCT_UPDATED",
+      entityType: ActivityEntityType.PRODUCT,
+      entityId: updated.id,
+      title: `${updated.name} product details updated`,
+      details: `${updated.sku} stock ${updated.currentStock}, minimum ${updated.minimumStock}`,
+      createdById: req.user!.id
+    });
     return res.json(updated);
   })
 );
@@ -150,6 +167,14 @@ productRouter.post(
       return { product: updated, movement };
     });
 
+    await logActivity({
+      action: "STOCK_MOVEMENT_RECORDED",
+      entityType: ActivityEntityType.PRODUCT,
+      entityId: result.product.id,
+      title: `${body.type} stock movement recorded for ${product.name}`,
+      details: `${body.quantity} units. Reason: ${body.reason}`,
+      createdById: req.user!.id
+    });
     return res.status(201).json(result);
   })
 );
