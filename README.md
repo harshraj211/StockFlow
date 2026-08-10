@@ -12,6 +12,7 @@ Full-stack case study for a wholesale/distribution business. The app covers auth
 
 ## Key Backend Features & Enhancements
 
+- **Reviewer Walkthrough Mode**: In-app guide that explains seeded credentials, demo flow, role boundaries, and business rules for fast project evaluation.
 - **JWT Authentication & RBAC**: Roles (`ADMIN`, `SALES`, `WAREHOUSE`, `ACCOUNTS`) with granular endpoint protection and user account activation control (`isActive`).
 - **Security & Rate Limiting**: Built-in rate limiting on `/auth/login` (20 req/15min) and Helmet HTTP security headers.
 - **Health Check API**: `GET /health` conducts a live database ping check (`SELECT 1`).
@@ -20,8 +21,21 @@ Full-stack case study for a wholesale/distribution business. The app covers auth
 - **Product & Inventory Module**: Product management with SKU uniqueness enforcement, category/location tracking, stock level warnings, and full stock movement audit logging (`IN` / `OUT` with reason & user attribution).
 - **Sales Challan Engine**: Multi-product challan creation (Draft or Confirmed), auto-generated sequential numbers (`CH-2026-00001`), snapshotting of product details (name, SKU, unit price), total amount computation, and atomic database transactions ensuring stock never drops below zero.
 - **Admin User Management**: `ADMIN` role can list users, register new team members, adjust roles, and activate/deactivate accounts.
-- **Operational UI Polish**: Customer/product edit flows, full customer detail panel, product filters, low-stock-only view, manual stock movement entry, product movement audit trail, challan detail view, browser print flow, server-generated PDF download, pagination controls, and role-aware read-only states.
+- **Operational UI Polish**: Customer/product edit flows, full customer detail panel, direct notification-to-record opening, product filters, low-stock-only view, manual stock movement entry, product movement audit trail, challan lifecycle timeline, professional browser print flow, server-generated PDF download, pagination controls, and role-aware read-only states.
 - **Backend Test Coverage**: Tests cover login, role denial, negative stock prevention, and challan confirmation stock deduction.
+
+---
+
+## What Makes StockFlow Different
+
+Most submissions for this case study can stop at CRUD. StockFlow adds business-facing reliability and reviewer-friendly product depth:
+
+1. **Actionable Dashboard**: Low stock, follow-up, draft challan, revenue, and operational exception signals are visible from the first screen.
+2. **Notification Deep Links**: Alerts open the exact customer, product, or challan record that needs attention.
+3. **Audit Thinking**: Customer activity, inventory movements, and challan lifecycle events are visible in timeline or ledger format.
+4. **Strong Business Rules**: Stock confirmation is transactional, duplicate SKUs are blocked, and insufficient stock leaves the database unchanged.
+5. **Professional Document Output**: Challan print view includes StockFlow branding, customer details, item table, totals, notes, and signature area.
+6. **Role Demonstration**: Admin, Sales, Warehouse, and Accounts accounts show different permission boundaries clearly in the UI and API.
 
 ---
 
@@ -155,10 +169,11 @@ A complete, production-ready Postman collection is included in `postman/Mini_ERP
 - `prisma/schema.prisma`: Data models with relations, enums, indexes, and precision numeric types (`Decimal(12,2)`).
 
 ### Frontend (`apps/frontend`)
-- Dashboard: Revenue KPIs, low-stock alerts, upcoming follow-ups, and recent challans.
+- Walkthrough: Reviewer-ready demo guide, credentials, module shortcuts, and business-rule highlights.
+- Dashboard: Revenue KPIs, low-stock alerts, upcoming follow-ups, direct notification actions, and recent challans.
 - Customers: Add/edit customers, follow-up filters, full detail view, and follow-up notes.
-- Products: Add/edit products, category/location/low-stock filters, manual stock movement, and audit history.
-- Challans: Create draft/confirmed challans, detail view, draft notes, confirm/cancel actions, browser print, and server PDF download.
+- Products: Add/edit products, status badges, category/location/low-stock filters, reorder suggestion, manual stock movement, and audit history.
+- Challans: Create draft/confirmed challans, detail view, lifecycle timeline, draft notes, confirm/cancel actions, professional browser print, and server PDF download.
 - Lists: API-backed pagination controls on customer, product, challan, and user lists.
 - Users: Admin-only user creation, role updates, activation, and deactivation.
 
@@ -187,23 +202,14 @@ A complete, production-ready Postman collection is included in `postman/Mini_ERP
 Recommended 4-6 minute walkthrough:
 
 1. Login as Admin and show dashboard KPIs.
-2. Add or edit a customer and add a follow-up note.
-3. Filter customers by follow-up state.
-4. Add or edit a product, then record an IN/OUT stock movement.
-5. Show product filters and movement history.
-6. Create a draft challan with notes and multiple items.
-7. Open challan detail, confirm it, and show stock reduction.
-8. Use Print / Export PDF from the challan detail view.
-9. Show Admin user management and role-aware read-only behavior.
-10. Open Postman collection or README briefly to show API/documentation readiness.
-
-## Deployment Checklist
-
-Before final submission:
-
-1. Create a Neon or Supabase PostgreSQL database.
-2. Deploy backend on Render/Railway/Fly.io with `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `FRONTEND_URL`, and `PORT`.
-3. Run `pnpm --filter backend exec prisma migrate deploy` against production.
-4. Seed demo credentials only if the deployment is for review.
-5. Deploy frontend on Vercel/Netlify with `VITE_API_URL` pointing to the backend URL.
-6. Update this README with live frontend URL, live backend API URL, and final GitHub repository link.
+2. Open the Walkthrough page and explain roles plus business rules.
+3. Click a notification and show it opens the exact record needing attention.
+4. Add or edit a customer and add a follow-up note.
+5. Filter customers by follow-up state and show the customer activity timeline.
+6. Add or edit a product, then record an IN/OUT stock movement.
+7. Show product filters, status badges, reorder suggestion, and movement ledger.
+8. Create a draft challan with notes and multiple items.
+9. Open challan detail, confirm it, and show stock reduction plus lifecycle timeline.
+10. Use Print / Export PDF from the challan detail view.
+11. Show Admin user management and role-aware read-only behavior.
+12. Open Postman collection or README briefly to show API/documentation readiness.
