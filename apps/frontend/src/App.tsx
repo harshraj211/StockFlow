@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Boxes, ClipboardList, LogOut, PackagePlus, Search, UserRoundPlus, UsersRound } from "lucide-react";
-import { api, Challan, Customer, errorMessage, Product, Role, User } from "./api";
+import { Boxes, ClipboardList, LogOut, PackagePlus, Search, ShieldCheck, UserCog, UserRoundPlus, UsersRound } from "lucide-react";
+import { api, Challan, Customer, DashboardStats, errorMessage, Product, Role, User } from "./api";
 
-type Tab = "dashboard" | "customers" | "products" | "challans";
+type Tab = "dashboard" | "customers" | "products" | "challans" | "users";
 
 const demoUsers = [
   ["Admin", "admin@fundsroom.test"],
@@ -34,6 +34,13 @@ const blankProduct = {
   location: ""
 };
 
+const blankUser = {
+  name: "",
+  email: "",
+  password: "Password@123",
+  role: "SALES" as Role
+};
+
 function can(user: User | null, roles: Role[]) {
   return !!user && roles.includes(user.role);
 }
@@ -47,20 +54,26 @@ export function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [challans, setChallans] = useState<Challan[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [teamUsers, setTeamUsers] = useState<User[]>([]);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function loadData() {
     if (!localStorage.getItem("token")) return;
-    const [customerRes, productRes, challanRes] = await Promise.all([
+    const [customerRes, productRes, challanRes, dashboardRes, usersRes] = await Promise.all([
       api.get("/customers", { params: { limit: 50, search } }),
       api.get("/products", { params: { limit: 50, search } }),
-      api.get("/challans", { params: { limit: 50, search } })
+      api.get("/challans", { params: { limit: 50, search } }),
+      api.get("/dashboard/stats"),
+      user?.role === "ADMIN" ? api.get("/users", { params: { limit: 50, search } }) : Promise.resolve({ data: { items: [] } })
     ]);
     setCustomers(customerRes.data.items);
     setProducts(productRes.data.items);
     setChallans(challanRes.data.items);
+    setDashboardStats(dashboardRes.data);
+    setTeamUsers(usersRes.data.items);
   }
 
   useEffect(() => {
@@ -89,6 +102,8 @@ export function App() {
     setCustomers([]);
     setProducts([]);
     setChallans([]);
+    setDashboardStats(null);
+    setTeamUsers([]);
   }
 
   if (!user) {
@@ -129,6 +144,7 @@ export function App() {
           <button className={tab === "customers" ? "active" : ""} onClick={() => setTab("customers")}><UsersRound /> Customers</button>
           <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}><PackagePlus /> Products</button>
           <button className={tab === "challans" ? "active" : ""} onClick={() => setTab("challans")}><ClipboardList /> Challans</button>
+          {user.role === "ADMIN" && <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}><UserCog /> Users</button>}
         </nav>
         <button className="ghost" onClick={logout}><LogOut /> Logout</button>
       </aside>
@@ -146,28 +162,81 @@ export function App() {
         </header>
         {message && <p className="alert">{message}</p>}
 
-        {tab === "dashboard" && (
-          <section className="grid stats">
-            <Metric label="Customers" value={customers.length} />
-            <Metric label="Products" value={products.length} />
-            <Metric label="Low stock" value={lowStock.length} />
-            <Metric label="Draft challans" value={draftChallans.length} />
-          </section>
-        )}
+        {tab === "dashboard" && <DashboardView stats={dashboardStats} customers={customers.length} products={products.length} lowStock={lowStock.length} draftChallans={draftChallans.length} />}
         {tab === "customers" && <CustomersView user={user} customers={customers} reload={loadData} setMessage={setMessage} />}
         {tab === "products" && <ProductsView user={user} products={products} reload={loadData} setMessage={setMessage} />}
         {tab === "challans" && <ChallansView user={user} customers={customers} products={products} challans={challans} reload={loadData} setMessage={setMessage} />}
+        {tab === "users" && user.role === "ADMIN" && <UsersView currentUser={user} users={teamUsers} reload={loadData} setMessage={setMessage} />}
       </section>
     </main>
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function formatMoney(value: string | number | undefined) {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
+}
+
+function Metric({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
   return (
     <article className="metric">
       <span>{label}</span>
       <strong>{value}</strong>
+      {hint && <small>{hint}</small>}
     </article>
+  );
+}
+
+function DashboardView({ stats, customers, products, lowStock, draftChallans }: { stats: DashboardStats | null; customers: number; products: number; lowStock: number; draftChallans: number }) {
+  const customerStats = stats?.customers ?? { total: customers, active: 0, leads: 0, inactive: 0 };
+  const productStats = stats?.products ?? { total: products, lowStock };
+  const challanStats = stats?.challans ?? { total: 0, draft: draftChallans, confirmed: 0, cancelled: 0 };
+
+  return (
+    <section className="dashboard-stack">
+      <div className="grid stats">
+        <Metric label="Revenue" value={formatMoney(stats?.revenue.confirmedTotal)} hint="Confirmed challans" />
+        <Metric label="Customers" value={customerStats.total} hint={`${customerStats.active} active / ${customerStats.leads} leads`} />
+        <Metric label="Products" value={productStats.total} hint={`${productStats.lowStock} low stock`} />
+        <Metric label="Draft challans" value={challanStats.draft} hint={`${challanStats.confirmed} confirmed`} />
+      </div>
+
+      <section className="dashboard-grid">
+        <div className="panel list compact-list">
+          <h2><ShieldCheck /> Low Stock Alerts</h2>
+          {(stats?.lowStockList ?? []).length === 0 && <p className="muted">No low-stock products right now.</p>}
+          {(stats?.lowStockList ?? []).map((product) => (
+            <article className="row" key={product.id}>
+              <strong>{product.name}</strong>
+              <span>{product.sku} - {product.location}</span>
+              <small className="danger">Stock {product.currentStock} / Min {product.minimumStock}</small>
+            </article>
+          ))}
+        </div>
+        <div className="panel list compact-list">
+          <h2><UsersRound /> Upcoming Follow-ups</h2>
+          {(stats?.upcomingFollowUps ?? []).length === 0 && <p className="muted">No follow-ups due this week.</p>}
+          {(stats?.upcomingFollowUps ?? []).map((customer) => (
+            <article className="row" key={customer.id}>
+              <strong>{customer.businessName}</strong>
+              <span>{customer.name} - {customer.mobile}</span>
+              <small>{customer.followUpDate ? new Date(customer.followUpDate).toLocaleDateString() : "No date"} - {customer.status}</small>
+            </article>
+          ))}
+        </div>
+        <div className="panel list compact-list">
+          <h2><ClipboardList /> Recent Challans</h2>
+          {(stats?.recentChallans ?? []).length === 0 && <p className="muted">No challans created yet.</p>}
+          {(stats?.recentChallans ?? []).map((challan) => (
+            <article className="row" key={challan.id}>
+              <strong>{challan.challanNumber} - {challan.customer.businessName}</strong>
+              <span>{formatMoney(challan.totalAmount)} - Qty {challan.totalQuantity}</span>
+              <small>{challan.status}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+    </section>
   );
 }
 
@@ -299,15 +368,21 @@ function ProductsView({ user, products, reload, setMessage }: { user: User; prod
 function ChallansView({ user, customers, products, challans, reload, setMessage }: { user: User; customers: Customer[]; products: Product[]; challans: Challan[]; reload: () => Promise<void>; setMessage: (value: string) => void }) {
   const [customerId, setCustomerId] = useState("");
   const [status, setStatus] = useState<"DRAFT" | "CONFIRMED">("DRAFT");
+  const [notes, setNotes] = useState("");
   const [lines, setLines] = useState([{ productId: "", quantity: 1 }]);
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+  const draftTotal = lines.reduce((sum, line) => {
+    const product = productMap.get(line.productId);
+    return sum + Number(product?.unitPrice ?? 0) * line.quantity;
+  }, 0);
 
   async function save(event: FormEvent) {
     event.preventDefault();
     try {
-      await api.post("/challans", { customerId, status, items: lines });
+      await api.post("/challans", { customerId, status, notes: notes || null, items: lines });
       setLines([{ productId: "", quantity: 1 }]);
       setCustomerId("");
+      setNotes("");
       setMessage("Challan saved");
       await reload();
     } catch (error) {
@@ -343,6 +418,8 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
               <input type="number" min="1" value={line.quantity} onChange={(e) => setLines(lines.map((item, lineIndex) => lineIndex === index ? { ...item, quantity: Number(e.target.value) } : item))} />
             </div>
           ))}
+          <textarea placeholder="Challan notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <p className="total-preview">Estimated total: <strong>{formatMoney(draftTotal)}</strong></p>
           <button type="button" className="secondary" onClick={() => setLines([...lines, { productId: "", quantity: 1 }])}>Add Product</button>
           <select value={status} onChange={(e) => setStatus(e.target.value as "DRAFT" | "CONFIRMED")}>
             <option value="DRAFT">Draft</option>
@@ -357,7 +434,8 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
           <article className="row" key={challan.id}>
             <strong>{challan.challanNumber} - {challan.customer.businessName}</strong>
             <span>{challan.items.map((item) => `${item.productName} x ${item.quantity}`).join(", ")}</span>
-            <small>{challan.status} - Qty {challan.totalQuantity}</small>
+            {challan.notes && <span>{challan.notes}</span>}
+            <small>{challan.status} - Qty {challan.totalQuantity} - {formatMoney(challan.totalAmount)}</small>
             {challan.status === "DRAFT" && (
               <div className="actions">
                 <button onClick={() => updateStatus(challan.id, "CONFIRMED")}>Confirm</button>
@@ -369,6 +447,82 @@ function ChallansView({ user, customers, products, challans, reload, setMessage 
         {lines.some((line) => line.productId) && (
           <p className="muted">Selected stock: {lines.map((line) => productMap.get(line.productId)?.currentStock ?? "-").join(", ")}</p>
         )}
+      </div>
+    </section>
+  );
+}
+
+function UsersView({ currentUser, users, reload, setMessage }: { currentUser: User; users: User[]; reload: () => Promise<void>; setMessage: (value: string) => void }) {
+  const [form, setForm] = useState(blankUser);
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    try {
+      await api.post("/users", form);
+      setForm(blankUser);
+      setMessage("User created");
+      await reload();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
+
+  async function setActive(user: User, nextActive: boolean) {
+    try {
+      await api.patch(`/users/${user.id}/${nextActive ? "activate" : "deactivate"}`);
+      setMessage(`${user.name} ${nextActive ? "activated" : "deactivated"}`);
+      await reload();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
+
+  async function updateRole(user: User, role: Role) {
+    try {
+      await api.put(`/users/${user.id}`, { role });
+      setMessage(`${user.name} role updated`);
+      await reload();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
+
+  return (
+    <section className="two-column">
+      <form className="panel" onSubmit={save}>
+        <h2><UserCog /> Add Team User</h2>
+        <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+        <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+        <input placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
+          <option value="ADMIN">Admin</option>
+          <option value="SALES">Sales</option>
+          <option value="WAREHOUSE">Warehouse</option>
+          <option value="ACCOUNTS">Accounts</option>
+        </select>
+        <button>Create User</button>
+      </form>
+
+      <div className="panel list">
+        <h2>Team Access</h2>
+        {users.map((teamUser) => (
+          <article className="row user-row" key={teamUser.id}>
+            <div>
+              <strong>{teamUser.name}</strong>
+              <span>{teamUser.email}</span>
+            </div>
+            <select value={teamUser.role} onChange={(e) => updateRole(teamUser, e.target.value as Role)} disabled={teamUser.id === currentUser.id}>
+              <option value="ADMIN">Admin</option>
+              <option value="SALES">Sales</option>
+              <option value="WAREHOUSE">Warehouse</option>
+              <option value="ACCOUNTS">Accounts</option>
+            </select>
+            <small className={teamUser.isActive === false ? "danger" : ""}>{teamUser.isActive === false ? "Inactive" : "Active"}</small>
+            <button className={teamUser.isActive === false ? "" : "secondary"} onClick={() => setActive(teamUser, teamUser.isActive === false)} disabled={teamUser.id === currentUser.id}>
+              {teamUser.id === currentUser.id ? "Current user" : teamUser.isActive === false ? "Activate" : "Deactivate"}
+            </button>
+          </article>
+        ))}
       </div>
     </section>
   );
