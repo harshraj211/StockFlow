@@ -139,6 +139,8 @@ export function App() {
   const [totals, setTotals] = useState({ customers: 0, products: 0, challans: 0, users: 0 });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sidebarCompact, setSidebarCompact] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   async function loadData() {
     if (!localStorage.getItem("token")) return;
@@ -245,9 +247,41 @@ export function App() {
 
   const lowStock = products.filter((product) => product.currentStock <= product.minimumStock);
   const draftChallans = challans.filter((challan) => challan.status === "DRAFT");
+  const notifications = [
+    ...lowStock.slice(0, 3).map((product) => ({
+      id: `stock-${product.id}`,
+      title: `${product.name} is low on stock`,
+      body: `${product.currentStock} available, minimum ${product.minimumStock}`,
+      tab: "products" as Tab,
+      tone: "danger"
+    })),
+    ...(dashboardStats?.upcomingFollowUps ?? []).slice(0, 3).map((customer) => ({
+      id: `follow-${customer.id}`,
+      title: `Follow-up due: ${customer.businessName}`,
+      body: customer.followUpDate ? new Date(customer.followUpDate).toLocaleDateString() : "No date",
+      tab: "customers" as Tab,
+      tone: "warning"
+    })),
+    ...draftChallans.slice(0, 3).map((challan) => ({
+      id: `challan-${challan.id}`,
+      title: `${challan.challanNumber} needs confirmation`,
+      body: `${challan.customer.businessName} - ${formatMoney(challan.totalAmount)}`,
+      tab: "challans" as Tab,
+      tone: "info"
+    })),
+    ...(user.role === "ADMIN"
+      ? [{
+          id: "admin-users",
+          title: "Admin access center ready",
+          body: "Review users, roles, activation status",
+          tab: "users" as Tab,
+          tone: "info"
+        }]
+      : [])
+  ];
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${sidebarCompact ? "sidebar-compact" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar-main">
           <div className="brand">
@@ -285,7 +319,7 @@ export function App() {
 
       <section className="workspace">
         <header className="topbar">
-          <button className="icon-button" aria-label="Menu"><Menu /></button>
+          <button className="icon-button" aria-label="Menu" onClick={() => setSidebarCompact((value) => !value)}><Menu /></button>
           <label className="search">
             <Search size={18} />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customers, products, challans..." />
@@ -294,7 +328,34 @@ export function App() {
           <div>
             <span className="date-chip"><CalendarDays size={16} /> Aug 10, 2026</span>
           </div>
-          <button className="icon-button alert-dot" aria-label="Notifications"><Bell /></button>
+          <div className="notification-wrap">
+            <button className={`icon-button ${notifications.length ? "alert-dot" : ""}`} aria-label="Notifications" onClick={() => setNotificationsOpen((value) => !value)}><Bell /></button>
+            {notificationsOpen && (
+              <div className="notification-panel">
+                <div className="notification-head">
+                  <strong>Notifications</strong>
+                  <button className="link-button" onClick={() => setNotificationsOpen(false)}>Close</button>
+                </div>
+                {notifications.length === 0 && <p className="muted">No urgent updates right now.</p>}
+                {notifications.map((item) => (
+                  <button
+                    key={item.id}
+                    className={`notification-item ${item.tone}`}
+                    onClick={() => {
+                      setTab(item.tab);
+                      setNotificationsOpen(false);
+                    }}
+                  >
+                    <strong>{item.title}</strong>
+                    <span>{item.body}</span>
+                  </button>
+                ))}
+                {notifications.length > 0 && (
+                  <button className="secondary" onClick={() => setNotificationsOpen(false)}>Mark all read</button>
+                )}
+              </div>
+            )}
+          </div>
           <div className="user-chip">
             <span>{user.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
             <div><strong>{user.name}</strong><small>{user.role}</small></div>
@@ -305,11 +366,20 @@ export function App() {
             <h1>{tab === "products" ? "Inventory" : tab[0].toUpperCase() + tab.slice(1)}</h1>
             <p className="muted">Track stock, customer follow-ups, challans, and operational exceptions.</p>
           </div>
-          <button className="secondary"><RefreshCw size={16} /> Refresh</button>
+          <button className="secondary" onClick={() => loadData()}><RefreshCw size={16} /> Refresh</button>
         </div>
         {message && <p className="alert">{message}</p>}
 
-        {tab === "dashboard" && <DashboardView stats={dashboardStats} customers={customers.length} products={products.length} lowStock={lowStock.length} draftChallans={draftChallans.length} />}
+        {tab === "dashboard" && (
+          <DashboardView
+            stats={dashboardStats}
+            customers={customers.length}
+            products={products.length}
+            lowStock={lowStock.length}
+            draftChallans={draftChallans.length}
+            onNavigate={setTab}
+          />
+        )}
         {tab === "customers" && <CustomersView user={user} customers={customers} page={page} total={totals.customers} setPage={setPage} reload={loadData} setMessage={setMessage} />}
         {tab === "products" && <ProductsView user={user} products={products} page={page} total={totals.products} setPage={setPage} reload={loadData} setMessage={setMessage} />}
         {tab === "challans" && <ChallansView user={user} customers={customers} products={products} challans={challans} page={page} total={totals.challans} setPage={setPage} reload={loadData} setMessage={setMessage} />}
@@ -361,7 +431,7 @@ function Pagination({ page, total, setPage }: { page: number; total: number; set
   );
 }
 
-function DashboardView({ stats, customers, products, lowStock, draftChallans }: { stats: DashboardStats | null; customers: number; products: number; lowStock: number; draftChallans: number }) {
+function DashboardView({ stats, customers, products, lowStock, draftChallans, onNavigate }: { stats: DashboardStats | null; customers: number; products: number; lowStock: number; draftChallans: number; onNavigate: (tab: Tab) => void }) {
   const customerStats = stats?.customers ?? { total: customers, active: 0, leads: 0, inactive: 0 };
   const productStats = stats?.products ?? { total: products, lowStock };
   const challanStats = stats?.challans ?? { total: 0, draft: draftChallans, confirmed: 0, cancelled: 0 };
@@ -377,17 +447,17 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans }: 
           <article>
             <AlertTriangle />
             <div><strong>{productStats.lowStock} low stock items</strong><span>Reorder soon to avoid stockouts.</span></div>
-            <a>View</a>
+            <button className="link-button" onClick={() => onNavigate("products")}>View</button>
           </article>
           <article>
             <AlertTriangle />
             <div><strong>{upcomingFollowUps.length} follow-ups due</strong><span>Customers need attention this week.</span></div>
-            <a>View</a>
+            <button className="link-button" onClick={() => onNavigate("customers")}>View</button>
           </article>
           <article>
             <Info />
             <div><strong>{challanStats.draft} challans pending</strong><span>Awaiting confirmation.</span></div>
-            <a>View</a>
+            <button className="link-button" onClick={() => onNavigate("challans")}>View</button>
           </article>
         </div>
 
@@ -412,7 +482,7 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans }: 
 
         <section className="dashboard-grid">
           <div className="panel list compact-list">
-            <div className="panel-toolbar"><h2>Low Stock Alerts</h2><a>View all</a></div>
+            <div className="panel-toolbar"><h2>Low Stock Alerts</h2><button className="link-button" onClick={() => onNavigate("products")}>View all</button></div>
             {lowStockItems.length === 0 && <p className="muted">No low-stock products right now.</p>}
             <DataTable
               headers={["SKU", "Item", "Current", "Min", "Status"]}
@@ -426,7 +496,7 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans }: 
             />
           </div>
           <div className="panel list compact-list">
-            <div className="panel-toolbar"><h2>Upcoming Follow-ups</h2><a>View all</a></div>
+            <div className="panel-toolbar"><h2>Upcoming Follow-ups</h2><button className="link-button" onClick={() => onNavigate("customers")}>View all</button></div>
             {upcomingFollowUps.length === 0 && <p className="muted">No follow-ups due this week.</p>}
             <DataTable
               headers={["Date", "Customer", "Type", "Status"]}
@@ -442,7 +512,7 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans }: 
 
         <section className="dashboard-grid">
           <div className="panel list compact-list">
-            <div className="panel-toolbar"><h2>Recent Challans</h2><a>View all</a></div>
+            <div className="panel-toolbar"><h2>Recent Challans</h2><button className="link-button" onClick={() => onNavigate("challans")}>View all</button></div>
             <DataTable
               headers={["Challan", "Customer", "Amount", "Status"]}
               rows={recentChallans.map((challan) => [
@@ -454,7 +524,7 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans }: 
             />
           </div>
           <div className="panel list compact-list">
-            <div className="panel-toolbar"><h2>Operational Exceptions</h2><a>View all</a></div>
+            <div className="panel-toolbar"><h2>Operational Exceptions</h2><button className="link-button" onClick={() => onNavigate("challans")}>View all</button></div>
             <DataTable
               headers={["Type", "Description", "Status"]}
               rows={[
@@ -498,8 +568,8 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans }: 
             ]}
           />
         </div>
-        <button><Warehouse size={16} /> Add Stock Movement</button>
-        <button className="secondary">View Item Ledger</button>
+        <button onClick={() => onNavigate("products")}><Warehouse size={16} /> Add Stock Movement</button>
+        <button className="secondary" onClick={() => onNavigate("products")}>View Item Ledger</button>
       </aside>
     </section>
   );
