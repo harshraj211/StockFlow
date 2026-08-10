@@ -1,10 +1,11 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { Role } from "@prisma/client";
+import { ActivityEntityType, Role } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
 import { asyncHandler, HttpError, routeParam } from "../http.js";
 import { createUserSchema, paginationQuery, updateUserSchema } from "../validators.js";
+import { logActivity } from "../activity.js";
 
 export const usersRouter = Router();
 usersRouter.use(requireAuth);
@@ -55,6 +56,14 @@ usersRouter.post(
       },
       select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true }
     });
+    await logActivity({
+      action: "USER_CREATED",
+      entityType: ActivityEntityType.USER,
+      entityId: user.id,
+      title: `${user.name} user account created`,
+      details: `Role ${user.role}`,
+      createdById: req.user!.id
+    });
     return res.status(201).json(user);
   })
 );
@@ -78,6 +87,14 @@ usersRouter.put(
       },
       select: { id: true, name: true, email: true, role: true, isActive: true, updatedAt: true }
     });
+    await logActivity({
+      action: "USER_UPDATED",
+      entityType: ActivityEntityType.USER,
+      entityId: updated.id,
+      title: `${updated.name} user account updated`,
+      details: `Role ${user.role} -> ${updated.role}`,
+      createdById: req.user!.id
+    });
     return res.json(updated);
   })
 );
@@ -97,6 +114,14 @@ usersRouter.patch(
       data: { isActive: false },
       select: { id: true, name: true, email: true, role: true, isActive: true }
     });
+    await logActivity({
+      action: "USER_DEACTIVATED",
+      entityType: ActivityEntityType.USER,
+      entityId: updated.id,
+      title: `${updated.name} deactivated`,
+      details: `Role ${updated.role}`,
+      createdById: req.user!.id
+    });
     return res.json(updated);
   })
 );
@@ -113,6 +138,14 @@ usersRouter.patch(
       where: { id },
       data: { isActive: true },
       select: { id: true, name: true, email: true, role: true, isActive: true }
+    });
+    await logActivity({
+      action: "USER_ACTIVATED",
+      entityType: ActivityEntityType.USER,
+      entityId: updated.id,
+      title: `${updated.name} activated`,
+      details: `Role ${updated.role}`,
+      createdById: req.user!.id
     });
     return res.json(updated);
   })
