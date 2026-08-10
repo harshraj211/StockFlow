@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   Bell,
   Boxes,
   CalendarDays,
   ClipboardList,
+  History,
   Info,
   LogOut,
   Menu,
@@ -20,9 +22,19 @@ import {
   Warehouse,
   X
 } from "lucide-react";
-import { api, Challan, Customer, DashboardStats, errorMessage, isNetworkError, Product, Role, User } from "./api";
+import { ActivityLog, api, Challan, Customer, DashboardStats, errorMessage, isNetworkError, Product, Role, User } from "./api";
 
-type Tab = "dashboard" | "walkthrough" | "customers" | "products" | "challans" | "users";
+type Tab = "dashboard" | "walkthrough" | "customers" | "products" | "challans" | "activity" | "users";
+type FieldErrors = Record<string, string>;
+const tabRoutes: Record<Tab, string> = {
+  dashboard: "/",
+  walkthrough: "/walkthrough",
+  customers: "/customers",
+  products: "/products",
+  challans: "/challans",
+  activity: "/activity",
+  users: "/users"
+};
 
 const demoUsers = [
   ["Admin", "admin@fundsroom.test"],
@@ -38,6 +50,7 @@ const blankCustomer = {
   businessName: "",
   gstNumber: "",
   type: "WHOLESALE",
+  priority: "WARM",
   address: "",
   status: "LEAD",
   followUpDate: "",
@@ -69,6 +82,7 @@ const demoCustomers: Customer[] = [
     email: "billing@rohantraders.test",
     businessName: "Rohan Traders Pvt Ltd",
     type: "WHOLESALE",
+    priority: "HOT",
     address: "Andheri East, Mumbai",
     status: "ACTIVE",
     followUpDate: "2026-08-11T10:00:00.000Z",
@@ -81,10 +95,44 @@ const demoCustomers: Customer[] = [
     email: "priya@sharmadistrib.test",
     businessName: "Sharma Distributors",
     type: "DISTRIBUTOR",
+    priority: "WARM",
     address: "Whitefield, Bengaluru",
     status: "LEAD",
     followUpDate: "2026-08-12T10:00:00.000Z",
     notes: "Needs updated rate card."
+  }
+];
+
+const demoActivities: ActivityLog[] = [
+  {
+    id: "demo-activity-1",
+    action: "CHALLAN_CONFIRMED",
+    entityType: "CHALLAN",
+    entityId: "demo-challan-1",
+    title: "CH-2026-00074 confirmed",
+    details: "Stock deducted for 50 units",
+    createdAt: "2026-08-10T10:45:00.000Z",
+    createdBy: { name: "Sales User", role: "SALES" }
+  },
+  {
+    id: "demo-activity-2",
+    action: "STOCK_MOVEMENT_RECORDED",
+    entityType: "PRODUCT",
+    entityId: "demo-product-1",
+    title: "OUT stock movement recorded for LED Tube Light 4ft 18W",
+    details: "50 units. Reason: Sales challan CH-2026-00074",
+    createdAt: "2026-08-10T10:44:00.000Z",
+    createdBy: { name: "Warehouse User", role: "WAREHOUSE" }
+  },
+  {
+    id: "demo-activity-3",
+    action: "FOLLOW_UP_ADDED",
+    entityType: "CUSTOMER",
+    entityId: "demo-customer-2",
+    title: "Customer follow-up note added",
+    details: "Shared updated rate card and scheduled callback.",
+    createdAt: "2026-08-10T09:20:00.000Z",
+    createdBy: { name: "Sales User", role: "SALES" }
   }
 ];
 
@@ -125,6 +173,8 @@ function can(user: User | null, roles: Role[]) {
 }
 
 export function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(() => {
     const raw = localStorage.getItem("user");
     return raw ? JSON.parse(raw) : null;
@@ -133,11 +183,13 @@ export function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [challans, setChallans] = useState<Challan[]>([]);
+  const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [teamUsers, setTeamUsers] = useState<User[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [totals, setTotals] = useState({ customers: 0, products: 0, challans: 0, users: 0 });
+  const [dashboardPeriod, setDashboardPeriod] = useState<"today" | "week" | "month">("month");
+  const [totals, setTotals] = useState({ customers: 0, products: 0, challans: 0, activity: 0, users: 0 });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarCompact, setSidebarCompact] = useState(false);
@@ -146,36 +198,64 @@ export function App() {
   const [focusedCustomerId, setFocusedCustomerId] = useState<string | null>(null);
   const [focusedProductId, setFocusedProductId] = useState<string | null>(null);
   const [focusedChallanId, setFocusedChallanId] = useState<string | null>(null);
+  const [loginErrors, setLoginErrors] = useState<FieldErrors>({});
+
+  const routeTab: Tab = location.pathname.startsWith("/walkthrough")
+    ? "walkthrough"
+    : location.pathname.startsWith("/customers")
+      ? "customers"
+      : location.pathname.startsWith("/products")
+        ? "products"
+        : location.pathname.startsWith("/challans")
+          ? "challans"
+          : location.pathname.startsWith("/activity")
+            ? "activity"
+            : location.pathname.startsWith("/users")
+              ? "users"
+              : "dashboard";
+  const activeTab = user ? routeTab : tab;
+  const routeParts = location.pathname.split("/").filter(Boolean);
+  const routeRecordId = routeParts[1] ?? null;
+
+  function go(tabName: Tab, recordId?: string) {
+    const base = tabRoutes[tabName];
+    navigate(recordId ? `${base}/${recordId}` : base);
+    setTab(tabName);
+  }
 
   async function loadData() {
     if (!localStorage.getItem("token")) return;
     const params = { page, limit: 10, search };
     try {
-      const [customerRes, productRes, challanRes, dashboardRes, usersRes] = await Promise.all([
+      const [customerRes, productRes, challanRes, activityRes, dashboardRes, usersRes] = await Promise.all([
         api.get("/customers", { params }),
         api.get("/products", { params }),
         api.get("/challans", { params }),
-        api.get("/dashboard/stats"),
+        api.get("/activity", { params }),
+        api.get("/dashboard/stats", { params: { period: dashboardPeriod } }),
         user?.role === "ADMIN" ? api.get("/users", { params }) : Promise.resolve({ data: { items: [], total: 0 } })
       ]);
       setCustomers(customerRes.data.items);
       setProducts(productRes.data.items);
       setChallans(challanRes.data.items);
+      setActivities(activityRes.data.items);
       setDashboardStats(dashboardRes.data);
       setTeamUsers(usersRes.data.items);
       setTotals({
         customers: customerRes.data.total,
         products: productRes.data.total,
         challans: challanRes.data.total,
+        activity: activityRes.data.total,
         users: usersRes.data.total
       });
     } catch (error) {
       setCustomers(demoCustomers);
       setProducts(demoProducts);
       setChallans(demoChallans);
+      setActivities(demoActivities);
       setDashboardStats({
         customers: { total: 1248, active: 1102, leads: 34, inactive: 112 },
-        products: { total: 342, lowStock: 8 },
+        products: { total: 342, healthyStock: 334, lowStock: 6, outOfStock: 2 },
         challans: { total: 87, draft: 2, confirmed: 74, cancelled: 5 },
         revenue: { confirmedTotal: 24875430 },
         lowStockList: demoProducts.filter((product) => product.currentStock <= product.minimumStock),
@@ -183,14 +263,14 @@ export function App() {
         recentChallans: demoChallans
       });
       setTeamUsers(user?.role === "ADMIN" ? [{ ...user, isActive: true }] : []);
-      setTotals({ customers: 1248, products: 342, challans: 87, users: user?.role === "ADMIN" ? 4 : 0 });
+      setTotals({ customers: 1248, products: 342, challans: 87, activity: demoActivities.length, users: user?.role === "ADMIN" ? 4 : 0 });
       throw error;
     }
   }
 
   useEffect(() => {
     loadData().catch((error) => setMessage(errorMessage(error)));
-  }, [user, search, page]);
+  }, [user, search, page, dashboardPeriod]);
 
   useEffect(() => {
     setPage(1);
@@ -205,6 +285,7 @@ export function App() {
       localStorage.setItem("user", JSON.stringify(res.data.user));
       setUser(res.data.user);
       setTab("dashboard");
+      navigate("/");
     } catch (error) {
       if (!isNetworkError(error)) {
         setMessage(errorMessage(error));
@@ -215,6 +296,7 @@ export function App() {
       localStorage.setItem("user", JSON.stringify(demoUser));
       setUser(demoUser);
       setTab("dashboard");
+      navigate("/");
       setMessage(`Using offline demo mode because the API is unavailable: ${errorMessage(error)}`);
     } finally {
       setLoading(false);
@@ -223,6 +305,12 @@ export function App() {
 
   async function submitLogin(event: FormEvent) {
     event.preventDefault();
+    const errors = {
+      email: emailError(loginForm.email),
+      password: minLength(loginForm.password, 8, "Password must be at least 8 characters")
+    };
+    setLoginErrors(errors);
+    if (hasErrors(errors)) return;
     await login(loginForm.email, loginForm.password);
   }
 
@@ -232,8 +320,10 @@ export function App() {
     setCustomers([]);
     setProducts([]);
     setChallans([]);
+    setActivities([]);
     setDashboardStats(null);
     setTeamUsers([]);
+    navigate("/");
   }
 
   if (!user) {
@@ -255,6 +345,7 @@ export function App() {
                 onChange={(event) => setLoginForm({ ...loginForm, email: event.target.value })}
                 required
               />
+              <FieldError message={loginErrors.email} />
             </label>
             <label>
               Password
@@ -265,6 +356,7 @@ export function App() {
                 onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
                 required
               />
+              <FieldError message={loginErrors.password} />
             </label>
             <button disabled={loading}>{loading ? "Signing in..." : "Sign In"}</button>
           </form>
@@ -334,19 +426,20 @@ export function App() {
             </div>
           </div>
           <nav>
-            <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}><Boxes /> Dashboard</button>
-            <button className={tab === "walkthrough" ? "active" : ""} onClick={() => setTab("walkthrough")}><Sparkles /> Walkthrough</button>
-            <button className={tab === "customers" ? "active" : ""} onClick={() => setTab("customers")}><UsersRound /> Customers</button>
-            <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}><PackagePlus /> Inventory</button>
-            <button className={tab === "challans" ? "active" : ""} onClick={() => setTab("challans")}><ClipboardList /> Challans</button>
-            {user.role === "ADMIN" && <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}><UserCog /> Users</button>}
+            <button className={activeTab === "dashboard" ? "active" : ""} onClick={() => go("dashboard")}><Boxes /> Dashboard</button>
+            <button className={activeTab === "walkthrough" ? "active" : ""} onClick={() => go("walkthrough")}><Sparkles /> Walkthrough</button>
+            <button className={activeTab === "customers" ? "active" : ""} onClick={() => go("customers")}><UsersRound /> Customers</button>
+            <button className={activeTab === "products" ? "active" : ""} onClick={() => go("products")}><PackagePlus /> Inventory</button>
+            <button className={activeTab === "challans" ? "active" : ""} onClick={() => go("challans")}><ClipboardList /> Challans</button>
+            <button className={activeTab === "activity" ? "active" : ""} onClick={() => go("activity")}><History /> Activity</button>
+            {user.role === "ADMIN" && <button className={activeTab === "users" ? "active" : ""} onClick={() => go("users")}><UserCog /> Users</button>}
           </nav>
         </div>
         <div className="sidebar-footer">
           <div className="quick-actions">
             <span>Quick Actions</span>
-            <button className="ghost" onClick={() => setTab("challans")}><Plus /> Create Challan</button>
-            <button className="ghost" onClick={() => setTab("products")}><Warehouse /> Add Stock Movement</button>
+            <button className="ghost" onClick={() => go("challans")}><Plus /> Create Challan</button>
+            <button className="ghost" onClick={() => go("products")}><Warehouse /> Add Stock Movement</button>
           </div>
           <div className="role-card">
             <Warehouse size={18} />
@@ -385,7 +478,7 @@ export function App() {
                     key={item.id}
                     className={`notification-item ${item.tone}`}
                     onClick={() => {
-                      setTab(item.tab);
+                      go(item.tab, item.recordId ?? undefined);
                       if (item.tab === "customers") setFocusedCustomerId(item.recordId ?? null);
                       if (item.tab === "products") setFocusedProductId(item.recordId ?? null);
                       if (item.tab === "challans") setFocusedChallanId(item.recordId ?? null);
@@ -409,28 +502,31 @@ export function App() {
         </header>
         <div className="page-title">
           <div>
-            <h1>{tab === "products" ? "Inventory" : tab === "walkthrough" ? "System Walkthrough" : tab[0].toUpperCase() + tab.slice(1)}</h1>
+            <h1>{activeTab === "products" ? "Inventory" : activeTab === "walkthrough" ? "System Walkthrough" : activeTab === "activity" ? "Activity Log" : activeTab[0].toUpperCase() + activeTab.slice(1)}</h1>
             <p className="muted">Track stock, customer follow-ups, challans, and operational exceptions.</p>
           </div>
           <button className="secondary" onClick={() => loadData()}><RefreshCw size={16} /> Refresh</button>
         </div>
         {message && <p className="alert">{message}</p>}
 
-        {tab === "dashboard" && (
+        {activeTab === "dashboard" && (
           <DashboardView
             stats={dashboardStats}
             customers={customers.length}
             products={products.length}
             lowStock={lowStock.length}
             draftChallans={draftChallans.length}
-            onNavigate={setTab}
+            onNavigate={go}
+            period={dashboardPeriod}
+            setPeriod={setDashboardPeriod}
           />
         )}
-        {tab === "walkthrough" && <WalkthroughView onNavigate={setTab} />}
-        {tab === "customers" && <CustomersView user={user} customers={customers} page={page} total={totals.customers} setPage={setPage} reload={loadData} setMessage={setMessage} focusedId={focusedCustomerId} clearFocusedId={() => setFocusedCustomerId(null)} />}
-        {tab === "products" && <ProductsView user={user} products={products} page={page} total={totals.products} setPage={setPage} reload={loadData} setMessage={setMessage} focusedId={focusedProductId} clearFocusedId={() => setFocusedProductId(null)} />}
-        {tab === "challans" && <ChallansView user={user} customers={customers} products={products} challans={challans} page={page} total={totals.challans} setPage={setPage} reload={loadData} setMessage={setMessage} focusedId={focusedChallanId} clearFocusedId={() => setFocusedChallanId(null)} />}
-        {tab === "users" && user.role === "ADMIN" && <UsersView currentUser={user} users={teamUsers} page={page} total={totals.users} setPage={setPage} reload={loadData} setMessage={setMessage} />}
+        {activeTab === "walkthrough" && <WalkthroughView onNavigate={go} />}
+        {activeTab === "customers" && <CustomersView user={user} customers={customers} page={page} total={totals.customers} setPage={setPage} reload={loadData} setMessage={setMessage} focusedId={focusedCustomerId || (routeTab === "customers" ? routeRecordId : null)} clearFocusedId={() => setFocusedCustomerId(null)} onOpen={(id) => go("customers", id)} onBack={() => go("customers")} />}
+        {activeTab === "products" && <ProductsView user={user} products={products} page={page} total={totals.products} setPage={setPage} reload={loadData} setMessage={setMessage} focusedId={focusedProductId || (routeTab === "products" ? routeRecordId : null)} clearFocusedId={() => setFocusedProductId(null)} onOpen={(id) => go("products", id)} onBack={() => go("products")} />}
+        {activeTab === "challans" && <ChallansView user={user} customers={customers} products={products} challans={challans} page={page} total={totals.challans} setPage={setPage} reload={loadData} setMessage={setMessage} focusedId={focusedChallanId || (routeTab === "challans" ? routeRecordId : null)} clearFocusedId={() => setFocusedChallanId(null)} onOpen={(id) => go("challans", id)} onBack={() => go("challans")} />}
+        {activeTab === "activity" && <ActivityView activities={activities} page={page} total={totals.activity} setPage={setPage} />}
+        {activeTab === "users" && user.role === "ADMIN" && <UsersView currentUser={user} users={teamUsers} page={page} total={totals.users} setPage={setPage} reload={loadData} setMessage={setMessage} />}
       </section>
     </main>
   );
@@ -443,6 +539,49 @@ function formatMoney(value: string | number | undefined) {
 
 function toDateInput(value?: string | null) {
   return value ? new Date(value).toISOString().slice(0, 10) : "";
+}
+
+function exportCsv(filename: string, headers: string[], rows: Array<Array<string | number | null | undefined>>) {
+  const escapeCell = (value: string | number | null | undefined) => {
+    const text = String(value ?? "");
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+  const csv = [headers, ...rows].map((row) => row.map(escapeCell).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function required(value: string | number | null | undefined, message: string) {
+  return String(value ?? "").trim() ? "" : message;
+}
+
+function emailError(value: string) {
+  if (!value.trim()) return "Email is required";
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? "" : "Enter a valid email address";
+}
+
+function minLength(value: string, length: number, message: string) {
+  return value.trim().length >= length ? "" : message;
+}
+
+function positiveNumber(value: number, message: string) {
+  return Number(value) > 0 ? "" : message;
+}
+
+function nonNegativeNumber(value: number, message: string) {
+  return Number(value) >= 0 ? "" : message;
+}
+
+function hasErrors(errors: FieldErrors) {
+  return Object.values(errors).some(Boolean);
+}
+
+function FieldError({ message }: { message?: string }) {
+  return message ? <small className="field-error">{message}</small> : null;
 }
 
 function Metric({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
@@ -460,6 +599,18 @@ function PermissionNotice({ text }: { text: string }) {
     <div className="panel permission">
       <strong>Read-only access</strong>
       <span>{text}</span>
+    </div>
+  );
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="empty-state">
+      <Info size={18} />
+      <div>
+        <strong>{title}</strong>
+        <span>{body}</span>
+      </div>
     </div>
   );
 }
@@ -566,9 +717,9 @@ function Pagination({ page, total, setPage }: { page: number; total: number; set
   );
 }
 
-function DashboardView({ stats, customers, products, lowStock, draftChallans, onNavigate }: { stats: DashboardStats | null; customers: number; products: number; lowStock: number; draftChallans: number; onNavigate: (tab: Tab) => void }) {
+function DashboardView({ stats, customers, products, lowStock, draftChallans, onNavigate, period, setPeriod }: { stats: DashboardStats | null; customers: number; products: number; lowStock: number; draftChallans: number; onNavigate: (tab: Tab) => void; period: "today" | "week" | "month"; setPeriod: (period: "today" | "week" | "month") => void }) {
   const customerStats = stats?.customers ?? { total: customers, active: 0, leads: 0, inactive: 0 };
-  const productStats = stats?.products ?? { total: products, lowStock };
+  const productStats = stats?.products ?? { total: products, healthyStock: Math.max(products - lowStock, 0), lowStock, outOfStock: 0 };
   const challanStats = stats?.challans ?? { total: 0, draft: draftChallans, confirmed: 0, cancelled: 0 };
   const lowStockItems = stats?.lowStockList ?? [];
   const selectedProduct = lowStockItems[0];
@@ -581,7 +732,7 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans, on
         <div className="alert-strip">
           <article>
             <AlertTriangle />
-            <div><strong>{productStats.lowStock} low stock items</strong><span>Reorder soon to avoid stockouts.</span></div>
+            <div><strong>{productStats.outOfStock} out / {productStats.lowStock} low stock</strong><span>Reorder soon to avoid stockouts.</span></div>
             <button className="link-button" onClick={() => onNavigate("products")}>View</button>
           </article>
           <article>
@@ -602,16 +753,19 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans, on
               <h2>Key Metrics</h2>
               <span>As of Aug 10, 2026 10:30 AM</span>
             </div>
-            <select defaultValue="month">
-              <option value="month">This Month</option>
+            <select value={period} onChange={(event) => setPeriod(event.target.value as "today" | "week" | "month")}>
+              <option value="today">Today</option>
               <option value="week">This Week</option>
+              <option value="month">This Month</option>
             </select>
           </div>
           <div className="grid stats">
-            <Metric label="Confirmed Revenue" value={formatMoney(stats?.revenue.confirmedTotal)} hint="Up 18.6% vs last period" />
+            <Metric label="Confirmed Revenue" value={formatMoney(stats?.revenue.confirmedTotal)} hint={period === "today" ? "Today" : period === "week" ? "This week" : "This month"} />
             <Metric label="Customers" value={customerStats.total} hint={`${customerStats.active} active / ${customerStats.leads} leads`} />
             <Metric label="Challans Confirmed" value={challanStats.confirmed} hint="Stock updated" />
-            <Metric label="Low Stock Items" value={productStats.lowStock} hint="Critical attention" />
+            <Metric label="Healthy Stock" value={productStats.healthyStock} hint="Above minimum" />
+            <Metric label="Low Stock Items" value={productStats.lowStock} hint="Below reorder level" />
+            <Metric label="Out of Stock" value={productStats.outOfStock} hint="Immediate action" />
           </div>
         </section>
 
@@ -634,11 +788,11 @@ function DashboardView({ stats, customers, products, lowStock, draftChallans, on
             <div className="panel-toolbar"><h2>Upcoming Follow-ups</h2><button className="link-button" onClick={() => onNavigate("customers")}>View all</button></div>
             {upcomingFollowUps.length === 0 && <p className="muted">No follow-ups due this week.</p>}
             <DataTable
-              headers={["Date", "Customer", "Type", "Status"]}
+              headers={["Date", "Customer", "Priority", "Status"]}
               rows={upcomingFollowUps.map((customer) => [
                 customer.followUpDate ? new Date(customer.followUpDate).toLocaleDateString() : "-",
                 customer.businessName,
-                "Follow-up",
+                customer.priority,
                 customer.status
               ])}
             />
@@ -715,6 +869,10 @@ function InfoRow({ label, value, danger }: { label: string; value: string; dange
 }
 
 function DataTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  if (rows.length === 0) {
+    return <EmptyState title="No rows to show" body="Data will appear here when matching records are available." />;
+  }
+
   return (
     <div className="table-wrap">
       <table className="data-table">
@@ -731,18 +889,25 @@ function DataTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
   );
 }
 
-function CustomersView({ user, customers, page, total, setPage, reload, setMessage, focusedId, clearFocusedId }: { user: User; customers: Customer[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void; focusedId: string | null; clearFocusedId: () => void }) {
+function CustomersView({ user, customers, page, total, setPage, reload, setMessage, focusedId, clearFocusedId, onOpen, onBack }: { user: User; customers: Customer[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void; focusedId: string | null; clearFocusedId: () => void; onOpen: (id: string) => void; onBack: () => void }) {
   const [form, setForm] = useState(blankCustomer);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [followUpFilter, setFollowUpFilter] = useState<"ALL" | "TODAY" | "WEEK" | "OVERDUE" | "LEADS">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | Customer["status"]>("ALL");
+  const [priorityFilter, setPriorityFilter] = useState<"ALL" | Customer["priority"]>("ALL");
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [noteErrors, setNoteErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
     if (!focusedId) return;
     const customer = customers.find((item) => item.id === focusedId);
-    if (!customer) return;
-    openCustomer(customer);
+    if (customer) {
+      openCustomer(customer);
+    } else {
+      openCustomerById(focusedId);
+    }
     clearFocusedId();
   }, [focusedId, customers]);
 
@@ -755,6 +920,7 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
       businessName: customer.businessName,
       gstNumber: customer.gstNumber ?? "",
       type: customer.type,
+      priority: customer.priority,
       address: customer.address,
       status: customer.status,
       followUpDate: toDateInput(customer.followUpDate),
@@ -769,6 +935,15 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    const nextErrors = {
+      name: minLength(form.name, 2, "Customer name must be at least 2 characters"),
+      mobile: minLength(form.mobile, 7, "Mobile must be at least 7 digits"),
+      email: emailError(form.email),
+      businessName: minLength(form.businessName, 2, "Business name must be at least 2 characters"),
+      address: minLength(form.address, 3, "Address must be at least 3 characters")
+    };
+    setErrors(nextErrors);
+    if (hasErrors(nextErrors)) return;
     try {
       const payload = { ...form, followUpDate: form.followUpDate ? new Date(form.followUpDate).toISOString() : null };
       if (editingId) {
@@ -788,11 +963,15 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
   async function addNote(event: FormEvent) {
     event.preventDefault();
     if (!selected) return;
+    const nextErrors = { note: minLength(note, 2, "Follow-up note must be at least 2 characters") };
+    setNoteErrors(nextErrors);
+    if (hasErrors(nextErrors)) return;
     try {
       await api.post(`/customers/${selected.id}/follow-ups`, { note });
       const detail = await api.get(`/customers/${selected.id}`);
       setSelected(detail.data);
       setNote("");
+      setNoteErrors({});
       setMessage("Follow-up note added");
     } catch (error) {
       setMessage(errorMessage(error));
@@ -807,7 +986,17 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
     }
   }
 
+  async function openCustomerById(id: string) {
+    try {
+      setSelected((await api.get(`/customers/${id}`)).data);
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
+
   const filteredCustomers = customers.filter((customer) => {
+    if (statusFilter !== "ALL" && customer.status !== statusFilter) return false;
+    if (priorityFilter !== "ALL" && customer.priority !== priorityFilter) return false;
     if (followUpFilter === "LEADS") return customer.status === "LEAD";
     if (!customer.followUpDate && followUpFilter !== "ALL") return false;
     const today = new Date();
@@ -830,14 +1019,23 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
         <form className="panel" onSubmit={save}>
           <h2><UserRoundPlus /> {editingId ? "Edit Customer" : "Add Customer"}</h2>
           <input placeholder="Customer name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <FieldError message={errors.name} />
           <input placeholder="Mobile" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} required />
+          <FieldError message={errors.mobile} />
           <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+          <FieldError message={errors.email} />
           <input placeholder="Business name" value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} required />
+          <FieldError message={errors.businessName} />
           <input placeholder="GST number" value={form.gstNumber} onChange={(e) => setForm({ ...form, gstNumber: e.target.value })} />
           <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
             <option value="RETAIL">Retail</option>
             <option value="WHOLESALE">Wholesale</option>
             <option value="DISTRIBUTOR">Distributor</option>
+          </select>
+          <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+            <option value="HOT">Hot Priority</option>
+            <option value="WARM">Warm Priority</option>
+            <option value="COLD">Cold Priority</option>
           </select>
           <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
             <option value="LEAD">Lead</option>
@@ -846,6 +1044,7 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
           </select>
           <input type="date" value={form.followUpDate} onChange={(e) => setForm({ ...form, followUpDate: e.target.value })} />
           <textarea placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required />
+          <FieldError message={errors.address} />
           <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           <div className="actions">
             <button>{editingId ? "Update Customer" : "Save Customer"}</button>
@@ -855,19 +1054,43 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
       )}
       {!can(user, ["ADMIN", "SALES"]) && <PermissionNotice text="This role can view CRM records but cannot create customers or add follow-up notes." />}
       <div className="panel list">
-        <h2>Customer Records</h2>
+        <div className="panel-toolbar">
+          <h2>Customer Records</h2>
+          <button className="secondary" onClick={() => exportCsv(
+            "stockflow-customers.csv",
+            ["Business", "Name", "Mobile", "Email", "Type", "Priority", "Status", "Follow Up"],
+            filteredCustomers.map((customer) => [customer.businessName, customer.name, customer.mobile, customer.email, customer.type, customer.priority, customer.status, customer.followUpDate ? new Date(customer.followUpDate).toLocaleDateString() : ""])
+          )}>Export CSV</button>
+        </div>
         <div className="filter-bar">
           {(["ALL", "TODAY", "WEEK", "OVERDUE", "LEADS"] as const).map((filter) => (
             <button key={filter} className={followUpFilter === filter ? "" : "secondary"} onClick={() => setFollowUpFilter(filter)}>{filter}</button>
           ))}
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "ALL" | Customer["status"])}>
+            <option value="ALL">All statuses</option>
+            <option value="LEAD">Lead</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
+          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as "ALL" | Customer["priority"])}>
+            <option value="ALL">All priorities</option>
+            <option value="HOT">Hot</option>
+            <option value="WARM">Warm</option>
+            <option value="COLD">Cold</option>
+          </select>
         </div>
         {filteredCustomers.map((customer) => (
-          <button className="row" key={customer.id} onClick={() => openCustomer(customer)}>
-            <strong>{customer.businessName} <StatusBadge label={customer.status} tone={customer.status === "ACTIVE" ? "success" : customer.status === "LEAD" ? "warning" : "neutral"} /></strong>
+          <button className="row" key={customer.id} onClick={() => onOpen(customer.id)}>
+            <strong>
+              {customer.businessName}{" "}
+              <StatusBadge label={customer.status} tone={customer.status === "ACTIVE" ? "success" : customer.status === "LEAD" ? "warning" : "neutral"} />
+              <StatusBadge label={customer.priority} tone={customer.priority === "HOT" ? "danger" : customer.priority === "WARM" ? "warning" : "neutral"} />
+            </strong>
             <span>{customer.name} - {customer.mobile}</span>
             <small>{customer.status} / {customer.type}{customer.followUpDate ? ` / Follow-up ${new Date(customer.followUpDate).toLocaleDateString()}` : ""}</small>
           </button>
         ))}
+        {filteredCustomers.length === 0 && <EmptyState title="No customers found" body="Try another search term or follow-up filter." />}
         <Pagination page={page} total={total} setPage={setPage} />
         {selected && (
           <div className="detail detail-page">
@@ -876,11 +1099,15 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
                 <h3>{selected.businessName}</h3>
                 <p>{selected.name} - {selected.mobile} - {selected.email}</p>
               </div>
-              {can(user, ["ADMIN", "SALES"]) && <button className="secondary" onClick={() => beginEdit(selected)}>Edit Customer</button>}
+              <div className="actions">
+                <button className="secondary" onClick={onBack}>Back to Customers</button>
+                {can(user, ["ADMIN", "SALES"]) && <button className="secondary" onClick={() => beginEdit(selected)}>Edit Customer</button>}
+              </div>
             </div>
             <div className="meta-grid">
               <p><strong>Status</strong><br /><StatusBadge label={selected.status} tone={selected.status === "ACTIVE" ? "success" : selected.status === "LEAD" ? "warning" : "neutral"} /></p>
               <p><strong>Type</strong><br />{selected.type}</p>
+              <p><strong>Priority</strong><br /><StatusBadge label={selected.priority} tone={selected.priority === "HOT" ? "danger" : selected.priority === "WARM" ? "warning" : "neutral"} /></p>
               <p><strong>GST</strong><br />{selected.gstNumber || "Not provided"}</p>
               <p><strong>Follow-up</strong><br />{selected.followUpDate ? new Date(selected.followUpDate).toLocaleDateString() : "Not scheduled"}</p>
             </div>
@@ -890,6 +1117,7 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
               <form onSubmit={addNote} className="inline-form">
                 <input placeholder="Follow-up note" value={note} onChange={(e) => setNote(e.target.value)} required />
                 <button>Add</button>
+                <FieldError message={noteErrors.note} />
               </form>
             )}
             <h3>Customer Activity Timeline</h3>
@@ -927,14 +1155,16 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
   );
 }
 
-function ProductsView({ user, products, page, total, setPage, reload, setMessage, focusedId, clearFocusedId }: { user: User; products: Product[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void; focusedId: string | null; clearFocusedId: () => void }) {
+function ProductsView({ user, products, page, total, setPage, reload, setMessage, focusedId, clearFocusedId, onOpen, onBack }: { user: User; products: Product[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void; focusedId: string | null; clearFocusedId: () => void; onOpen: (id: string) => void; onBack: () => void }) {
   const [form, setForm] = useState(blankProduct);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
   const [movement, setMovement] = useState({ type: "IN" as "IN" | "OUT", quantity: 1, reason: "" });
   const [category, setCategory] = useState("ALL");
   const [location, setLocation] = useState("ALL");
-  const [lowOnly, setLowOnly] = useState(false);
+  const [stockFilter, setStockFilter] = useState<"ALL" | "HEALTHY" | "LOW" | "OUT">("ALL");
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [movementErrors, setMovementErrors] = useState<FieldErrors>({});
 
   const categories = Array.from(new Set(products.map((product) => product.category))).sort();
   const locations = Array.from(new Set(products.map((product) => product.location))).sort();
@@ -942,8 +1172,11 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
   useEffect(() => {
     if (!focusedId) return;
     const product = products.find((item) => item.id === focusedId);
-    if (!product) return;
-    selectProduct(product);
+    if (product) {
+      selectProduct(product);
+    } else {
+      selectProductById(focusedId);
+    }
     clearFocusedId();
   }, [focusedId, products]);
 
@@ -967,6 +1200,17 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    const nextErrors = {
+      name: minLength(form.name, 2, "Product name must be at least 2 characters"),
+      sku: minLength(form.sku, 2, "SKU must be at least 2 characters"),
+      category: minLength(form.category, 2, "Category must be at least 2 characters"),
+      unitPrice: nonNegativeNumber(Number(form.unitPrice), "Unit price must be 0 or more"),
+      currentStock: nonNegativeNumber(Number(form.currentStock), "Current stock must be 0 or more"),
+      minimumStock: nonNegativeNumber(Number(form.minimumStock), "Minimum stock must be 0 or more"),
+      location: minLength(form.location, 2, "Location must be at least 2 characters")
+    };
+    setErrors(nextErrors);
+    if (hasErrors(nextErrors)) return;
     try {
       if (editingId) {
         await api.put(`/products/${editingId}`, form);
@@ -994,13 +1238,32 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
     }
   }
 
+  async function selectProductById(id: string) {
+    try {
+      const [detail, movements] = await Promise.all([
+        api.get(`/products/${id}`),
+        api.get(`/products/${id}/movements`, { params: { page: 1, limit: 100 } })
+      ]);
+      setSelected({ ...detail.data, movements: movements.data.items });
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
+
   async function saveMovement(event: FormEvent) {
     event.preventDefault();
     if (!selected) return;
+    const nextErrors = {
+      quantity: positiveNumber(movement.quantity, "Quantity must be greater than 0"),
+      reason: minLength(movement.reason, 2, "Reason must be at least 2 characters")
+    };
+    setMovementErrors(nextErrors);
+    if (hasErrors(nextErrors)) return;
     try {
       const res = await api.post(`/products/${selected.id}/movements`, movement);
       setSelected({ ...res.data.product, movements: [res.data.movement, ...(selected.movements ?? [])] });
       setMovement({ type: "IN", quantity: 1, reason: "" });
+      setMovementErrors({});
       setMessage("Stock movement recorded");
       await reload();
     } catch (error) {
@@ -1011,7 +1274,9 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
   const filteredProducts = products.filter((product) => {
     if (category !== "ALL" && product.category !== category) return false;
     if (location !== "ALL" && product.location !== location) return false;
-    if (lowOnly && product.currentStock > product.minimumStock) return false;
+    if (stockFilter === "HEALTHY" && product.currentStock <= product.minimumStock) return false;
+    if (stockFilter === "LOW" && (product.currentStock === 0 || product.currentStock > product.minimumStock)) return false;
+    if (stockFilter === "OUT" && product.currentStock !== 0) return false;
     return true;
   });
 
@@ -1021,7 +1286,10 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
         <form className="panel" onSubmit={save}>
           <h2><PackagePlus /> {editingId ? "Edit Product" : "Add Product"}</h2>
           {Object.keys(blankProduct).map((key) => (
-            <input key={key} type={["unitPrice", "currentStock", "minimumStock"].includes(key) ? "number" : "text"} placeholder={key} value={(form as Record<string, string | number>)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} required />
+            <label className="field-stack" key={key}>
+              <input type={["unitPrice", "currentStock", "minimumStock"].includes(key) ? "number" : "text"} placeholder={key} value={(form as Record<string, string | number>)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} required />
+              <FieldError message={errors[key]} />
+            </label>
           ))}
           <div className="actions">
             <button>{editingId ? "Update Product" : "Save Product"}</button>
@@ -1031,7 +1299,14 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
       )}
       {!can(user, ["ADMIN", "WAREHOUSE"]) && <PermissionNotice text="This role can inspect inventory but cannot edit products or record stock movement." />}
       <div className="panel list">
-        <h2>Inventory</h2>
+        <div className="panel-toolbar">
+          <h2>Inventory</h2>
+          <button className="secondary" onClick={() => exportCsv(
+            "stockflow-products.csv",
+            ["SKU", "Name", "Category", "Location", "Unit Price", "Current Stock", "Minimum Stock", "Status"],
+            filteredProducts.map((product) => [product.sku, product.name, product.category, product.location, product.unitPrice, product.currentStock, product.minimumStock, stockLabel(product)])
+          )}>Export CSV</button>
+        </div>
         <div className="filter-grid">
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="ALL">All categories</option>
@@ -1041,19 +1316,22 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
             <option value="ALL">All locations</option>
             {locations.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
-          <label className="check-row">
-            <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} />
-            Low stock only
-          </label>
+          <select value={stockFilter} onChange={(event) => setStockFilter(event.target.value as "ALL" | "HEALTHY" | "LOW" | "OUT")}>
+            <option value="ALL">All stock states</option>
+            <option value="HEALTHY">Healthy only</option>
+            <option value="LOW">Low stock only</option>
+            <option value="OUT">Out of stock only</option>
+          </select>
         </div>
         {filteredProducts.map((product) => (
-          <article className="row" key={product.id} onClick={() => selectProduct(product)}>
+          <article className="row" key={product.id} onClick={() => onOpen(product.id)}>
             <strong>{product.name} <StatusBadge label={stockLabel(product)} tone={stockTone(product)} /></strong>
             <span>{product.sku} - {product.category} - {product.location}</span>
             <small className={product.currentStock <= product.minimumStock ? "danger" : ""}>Stock {product.currentStock} / Min {product.minimumStock}</small>
             {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="secondary" onClick={(event) => { event.stopPropagation(); beginEdit(product); }}>Edit</button>}
           </article>
         ))}
+        {filteredProducts.length === 0 && <EmptyState title="No products found" body="Try changing the category, location, low-stock filter, or search term." />}
         <Pagination page={page} total={total} setPage={setPage} />
         {selected && (
           <div className="detail detail-page">
@@ -1062,7 +1340,10 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
                 <h3>{selected.name}</h3>
                 <p>{selected.sku} - {selected.category} - {selected.location}</p>
               </div>
-              {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="secondary" onClick={() => beginEdit(selected)}>Edit Product</button>}
+              <div className="actions">
+                <button className="secondary" onClick={onBack}>Back to Inventory</button>
+                {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="secondary" onClick={() => beginEdit(selected)}>Edit Product</button>}
+              </div>
             </div>
             <div className="meta-grid">
               <p><strong>Current Stock</strong><br />{selected.currentStock}</p>
@@ -1080,6 +1361,7 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
                 <input type="number" min="1" value={movement.quantity} onChange={(e) => setMovement({ ...movement, quantity: Number(e.target.value) })} />
                 <input placeholder="Reason" value={movement.reason} onChange={(e) => setMovement({ ...movement, reason: e.target.value })} required />
                 <button>Record</button>
+                <FieldError message={movementErrors.quantity || movementErrors.reason} />
               </form>
             )}
             <h3>Inventory Audit Trail</h3>
@@ -1111,13 +1393,16 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
   );
 }
 
-function ChallansView({ user, customers, products, challans, page, total, setPage, reload, setMessage, focusedId, clearFocusedId }: { user: User; customers: Customer[]; products: Product[]; challans: Challan[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void; focusedId: string | null; clearFocusedId: () => void }) {
+function ChallansView({ user, customers, products, challans, page, total, setPage, reload, setMessage, focusedId, clearFocusedId, onOpen, onBack }: { user: User; customers: Customer[]; products: Product[]; challans: Challan[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void; focusedId: string | null; clearFocusedId: () => void; onOpen: (id: string) => void; onBack: () => void }) {
   const [customerId, setCustomerId] = useState("");
   const [status, setStatus] = useState<"DRAFT" | "CONFIRMED">("DRAFT");
   const [notes, setNotes] = useState("");
   const [detail, setDetail] = useState<Challan | null>(null);
   const [detailNotes, setDetailNotes] = useState("");
   const [lines, setLines] = useState([{ productId: "", quantity: 1 }]);
+  const [challanFilter, setChallanFilter] = useState<"ALL" | Challan["status"]>("ALL");
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [detailNoteErrors, setDetailNoteErrors] = useState<FieldErrors>({});
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const draftTotal = lines.reduce((sum, line) => {
     const product = productMap.get(line.productId);
@@ -1130,13 +1415,25 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
     clearFocusedId();
   }, [focusedId]);
 
+  const filteredChallans = challans.filter((challan) => challanFilter === "ALL" || challan.status === challanFilter);
+
   async function save(event: FormEvent) {
     event.preventDefault();
+    const hasBlankProduct = lines.some((line) => !line.productId);
+    const hasBadQuantity = lines.some((line) => Number(line.quantity) <= 0);
+    const nextErrors = {
+      customerId: required(customerId, "Customer is required"),
+      items: hasBlankProduct ? "Select a product for every line" : "",
+      quantity: hasBadQuantity ? "Every quantity must be greater than 0" : ""
+    };
+    setErrors(nextErrors);
+    if (hasErrors(nextErrors)) return;
     try {
       await api.post("/challans", { customerId, status, notes: notes || null, items: lines });
       setLines([{ productId: "", quantity: 1 }]);
       setCustomerId("");
       setNotes("");
+      setErrors({});
       setMessage("Challan saved");
       await reload();
     } catch (error) {
@@ -1171,9 +1468,13 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
   async function saveDetailNotes(event: FormEvent) {
     event.preventDefault();
     if (!detail) return;
+    const nextErrors = { notes: detailNotes && detailNotes.trim().length < 2 ? "Notes must be at least 2 characters" : "" };
+    setDetailNoteErrors(nextErrors);
+    if (hasErrors(nextErrors)) return;
     try {
       const res = await api.patch(`/challans/${detail.id}/notes`, { notes: detailNotes || null });
       setDetail({ ...detail, notes: res.data.notes });
+      setDetailNoteErrors({});
       setMessage("Challan notes updated");
       await reload();
     } catch (error) {
@@ -1281,6 +1582,7 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
             <option value="">Select customer</option>
             {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.businessName}</option>)}
           </select>
+          <FieldError message={errors.customerId} />
           {lines.map((line, index) => (
             <div className="line-item" key={index}>
               <select value={line.productId} onChange={(e) => setLines(lines.map((item, lineIndex) => lineIndex === index ? { ...item, productId: e.target.value } : item))} required>
@@ -1290,6 +1592,7 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
               <input type="number" min="1" value={line.quantity} onChange={(e) => setLines(lines.map((item, lineIndex) => lineIndex === index ? { ...item, quantity: Number(e.target.value) } : item))} />
             </div>
           ))}
+          <FieldError message={errors.items || errors.quantity} />
           <textarea placeholder="Challan notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           <p className="total-preview">Estimated total: <strong>{formatMoney(draftTotal)}</strong></p>
           <button type="button" className="secondary" onClick={() => setLines([...lines, { productId: "", quantity: 1 }])}>Add Product</button>
@@ -1302,9 +1605,24 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
       )}
       {!can(user, ["ADMIN", "SALES"]) && <PermissionNotice text="This role can review challans and, where allowed, confirm or cancel drafts for accounts workflow." />}
       <div className="panel list">
-        <h2>Sales Challans</h2>
-        {challans.map((challan) => (
-          <article className="row" key={challan.id} onClick={() => openDetail(challan.id)}>
+        <div className="panel-toolbar">
+          <h2>Sales Challans</h2>
+          <button className="secondary" onClick={() => exportCsv(
+            "stockflow-challans.csv",
+            ["Challan", "Customer", "Status", "Quantity", "Amount", "Created"],
+            filteredChallans.map((challan) => [challan.challanNumber, challan.customer.businessName, challan.status, challan.totalQuantity, challan.totalAmount, new Date(challan.createdAt).toLocaleString()])
+          )}>Export CSV</button>
+        </div>
+        <div className="filter-bar">
+          <select value={challanFilter} onChange={(event) => setChallanFilter(event.target.value as "ALL" | Challan["status"])}>
+            <option value="ALL">All challans</option>
+            <option value="DRAFT">Draft</option>
+            <option value="CONFIRMED">Confirmed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
+        {filteredChallans.map((challan) => (
+          <article className="row" key={challan.id} onClick={() => onOpen(challan.id)}>
             <strong>
               {challan.challanNumber} - {challan.customer.businessName}{" "}
               <StatusBadge label={challan.status} tone={challan.status === "CONFIRMED" ? "success" : challan.status === "DRAFT" ? "warning" : "danger"} />
@@ -1320,6 +1638,7 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
             )}
           </article>
         ))}
+        {filteredChallans.length === 0 && <EmptyState title="No challans found" body="Create a challan or adjust the search/status filter." />}
         <Pagination page={page} total={total} setPage={setPage} />
         {lines.some((line) => line.productId) && (
           <p className="muted">Selected stock: {lines.map((line) => productMap.get(line.productId)?.currentStock ?? "-").join(", ")}</p>
@@ -1332,6 +1651,7 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
                 <p>{detail.customer.businessName} <StatusBadge label={detail.status} tone={detail.status === "CONFIRMED" ? "success" : detail.status === "DRAFT" ? "warning" : "danger"} /></p>
               </div>
               <div className="actions">
+                <button className="secondary" onClick={onBack}>Back to Challans</button>
                 <button className="secondary" onClick={() => printChallan(detail)}>Browser Print</button>
                 <button className="secondary" onClick={() => downloadServerPdf(detail)}>Download PDF</button>
               </div>
@@ -1346,44 +1666,29 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
               <form onSubmit={saveDetailNotes} className="inline-form">
                 <input value={detailNotes} onChange={(e) => setDetailNotes(e.target.value)} placeholder="Draft notes" />
                 <button>Save Notes</button>
+                <FieldError message={detailNoteErrors.notes} />
               </form>
             ) : detail.notes ? <p>{detail.notes}</p> : null}
             <h3>Challan Timeline</h3>
             <div className="timeline-list compact-timeline">
-              <article className="timeline-item">
-                <span>1</span>
-                <div>
-                  <strong>Challan created</strong>
-                  <p>{new Date(detail.createdAt).toLocaleString()} by {detail.createdBy?.name ?? "System"}</p>
-                </div>
-              </article>
-              {detail.status === "CONFIRMED" && (
-                <article className="timeline-item">
-                  <span>2</span>
+              {(detail.statusHistory?.length ? detail.statusHistory : [{
+                id: "fallback-created",
+                fromStatus: null,
+                toStatus: detail.status,
+                note: detail.status === "CONFIRMED" ? "Stock deducted and challan confirmed" : detail.status === "CANCELLED" ? "Challan cancelled" : "Draft challan created",
+                createdAt: detail.confirmedAt ?? detail.createdAt,
+                changedBy: detail.createdBy
+              }]).map((history, index) => (
+                <article className="timeline-item" key={history.id}>
+                  <span>{index + 1}</span>
                   <div>
-                    <strong>Stock deducted and challan confirmed</strong>
-                    <p>{detail.confirmedAt ? new Date(detail.confirmedAt).toLocaleString() : "Confirmed"}</p>
+                    <strong>{history.fromStatus ? `${history.fromStatus} -> ${history.toStatus}` : `${history.toStatus} created`}</strong>
+                    <p>
+                      {history.note ?? "Status updated"} by {history.changedBy?.name ?? "System"} {history.changedBy?.role ? `(${history.changedBy.role})` : ""} on {new Date(history.createdAt).toLocaleString()}
+                    </p>
                   </div>
                 </article>
-              )}
-              {detail.status === "DRAFT" && (
-                <article className="timeline-item">
-                  <span>2</span>
-                  <div>
-                    <strong>Waiting for confirmation</strong>
-                    <p>Stock will change only after confirmation succeeds.</p>
-                  </div>
-                </article>
-              )}
-              {detail.status === "CANCELLED" && (
-                <article className="timeline-item">
-                  <span>2</span>
-                  <div>
-                    <strong>Challan cancelled</strong>
-                    <p>No further stock action is allowed from this state.</p>
-                  </div>
-                </article>
-              )}
+              ))}
             </div>
             <div className="table-wrap">
               <table>
@@ -1410,14 +1715,80 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
   );
 }
 
+function ActivityView({ activities, page, total, setPage }: { activities: ActivityLog[]; page: number; total: number; setPage: (page: number) => void }) {
+  const [entityFilter, setEntityFilter] = useState<"ALL" | ActivityLog["entityType"]>("ALL");
+  const toneByEntity: Record<ActivityLog["entityType"], "success" | "warning" | "danger" | "info" | "neutral"> = {
+    CUSTOMER: "warning",
+    PRODUCT: "success",
+    CHALLAN: "info",
+    USER: "neutral",
+    SYSTEM: "danger"
+  };
+  const filteredActivities = activities.filter((activity) => entityFilter === "ALL" || activity.entityType === entityFilter);
+
+  return (
+    <section className="activity-page">
+      <div className="panel">
+        <div className="panel-toolbar">
+          <div>
+            <h2><History /> Global Activity Log</h2>
+            <span>One audit stream across CRM, inventory, challans, and admin actions.</span>
+          </div>
+          <button className="secondary" onClick={() => exportCsv(
+            "stockflow-activity.csv",
+            ["Entity", "Action", "Title", "Details", "By", "Created"],
+            filteredActivities.map((activity) => [activity.entityType, activity.action, activity.title, activity.details, activity.createdBy ? `${activity.createdBy.name} (${activity.createdBy.role})` : "System", new Date(activity.createdAt).toLocaleString()])
+          )}>Export CSV</button>
+        </div>
+        <div className="filter-bar">
+          <select value={entityFilter} onChange={(event) => setEntityFilter(event.target.value as "ALL" | ActivityLog["entityType"])}>
+            <option value="ALL">All activity</option>
+            <option value="CUSTOMER">Customer activity</option>
+            <option value="PRODUCT">Product activity</option>
+            <option value="CHALLAN">Challan activity</option>
+            <option value="USER">User activity</option>
+            <option value="SYSTEM">System activity</option>
+          </select>
+        </div>
+        {filteredActivities.length === 0 && <EmptyState title="No activity recorded yet" body="Activity will appear after customer, inventory, challan, or user actions." />}
+        <div className="activity-list">
+          {filteredActivities.map((activity) => (
+            <article className="activity-row" key={activity.id}>
+              <div>
+                <StatusBadge label={activity.entityType} tone={toneByEntity[activity.entityType]} />
+                <strong>{activity.title}</strong>
+                {activity.details && <p>{activity.details}</p>}
+              </div>
+              <div className="activity-meta">
+                <span>{activity.createdBy ? `${activity.createdBy.name} (${activity.createdBy.role})` : "System"}</span>
+                <small>{new Date(activity.createdAt).toLocaleString()}</small>
+              </div>
+            </article>
+          ))}
+        </div>
+        <Pagination page={page} total={total} setPage={setPage} />
+      </div>
+    </section>
+  );
+}
+
 function UsersView({ currentUser, users, page, total, setPage, reload, setMessage }: { currentUser: User; users: User[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void }) {
   const [form, setForm] = useState(blankUser);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    const nextErrors = {
+      name: minLength(form.name, 2, "Name must be at least 2 characters"),
+      email: emailError(form.email),
+      password: minLength(form.password, 8, "Password must be at least 8 characters")
+    };
+    setErrors(nextErrors);
+    if (hasErrors(nextErrors)) return;
     try {
       await api.post("/users", form);
       setForm(blankUser);
+      setErrors({});
       setMessage("User created");
       await reload();
     } catch (error) {
@@ -1450,8 +1821,11 @@ function UsersView({ currentUser, users, page, total, setPage, reload, setMessag
       <form className="panel" onSubmit={save}>
         <h2><UserCog /> Add Team User</h2>
         <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+        <FieldError message={errors.name} />
         <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+        <FieldError message={errors.email} />
         <input placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+        <FieldError message={errors.password} />
         <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
           <option value="ADMIN">Admin</option>
           <option value="SALES">Sales</option>
