@@ -19,7 +19,7 @@ import {
   Warehouse,
   X
 } from "lucide-react";
-import { api, Challan, Customer, DashboardStats, errorMessage, Product, Role, User } from "./api";
+import { api, Challan, Customer, DashboardStats, errorMessage, isNetworkError, Product, Role, User } from "./api";
 
 type Tab = "dashboard" | "customers" | "products" | "challans" | "users";
 
@@ -141,6 +141,7 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [sidebarCompact, setSidebarCompact] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [loginForm, setLoginForm] = useState({ email: "admin@fundsroom.test", password: "Password@123" });
 
   async function loadData() {
     if (!localStorage.getItem("token")) return;
@@ -191,16 +192,20 @@ export function App() {
     setPage(1);
   }, [tab, search]);
 
-  async function login(email: string) {
+  async function login(email: string, password = "Password@123") {
     setLoading(true);
     setMessage("");
     try {
-      const res = await api.post("/auth/login", { email, password: "Password@123" });
+      const res = await api.post("/auth/login", { email, password });
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));
       setUser(res.data.user);
       setTab("dashboard");
     } catch (error) {
+      if (!isNetworkError(error)) {
+        setMessage(errorMessage(error));
+        return;
+      }
       const demoUser = { id: `demo-${email}`, name: email.split("@")[0], email, role: email.includes("warehouse") ? "WAREHOUSE" : email.includes("accounts") ? "ACCOUNTS" : email.includes("sales") ? "SALES" : "ADMIN" } as User;
       localStorage.setItem("token", "offline-demo-token");
       localStorage.setItem("user", JSON.stringify(demoUser));
@@ -210,6 +215,11 @@ export function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function submitLogin(event: FormEvent) {
+    event.preventDefault();
+    await login(loginForm.email, loginForm.password);
   }
 
   function logout() {
@@ -223,14 +233,38 @@ export function App() {
   }
 
   if (!user) {
-  return (
-    <main className="login-screen">
-      <section className="login-panel">
-        <div>
+    return (
+      <main className="login-screen">
+        <section className="login-panel">
+          <div>
             <p className="eyebrow">StockFlow</p>
             <h1>Operations Portal</h1>
-            <p className="muted">Use seeded credentials to review each operational role quickly.</p>
+            <p className="muted">Sign in with your team credentials or use a demo role shortcut.</p>
           </div>
+          <form className="login-form" onSubmit={submitLogin}>
+            <label>
+              Email
+              <input
+                type="email"
+                placeholder="admin@fundsroom.test"
+                value={loginForm.email}
+                onChange={(event) => setLoginForm({ ...loginForm, email: event.target.value })}
+                required
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                placeholder="Password@123"
+                value={loginForm.password}
+                onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
+                required
+              />
+            </label>
+            <button disabled={loading}>{loading ? "Signing in..." : "Sign In"}</button>
+          </form>
+          <p className="muted login-divider">Demo shortcuts</p>
           <div className="login-grid">
             {demoUsers.map(([label, email]) => (
               <button className="login-card" key={email} onClick={() => login(email)} disabled={loading}>
