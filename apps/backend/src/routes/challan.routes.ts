@@ -4,7 +4,7 @@ import PDFDocument from "pdfkit";
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
 import { asyncHandler, HttpError, routeParam } from "../http.js";
-import { challanSchema, challanStatusSchema, paginationQuery, updateChallanNotesSchema } from "../validators.js";
+import { challanListQuery, challanSchema, challanStatusSchema, updateChallanNotesSchema } from "../validators.js";
 import { logActivity } from "../activity.js";
 
 export const challanRouter = Router();
@@ -88,16 +88,19 @@ async function confirmChallan(challanId: string, userId: string) {
 challanRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const query = paginationQuery.parse(req.query);
-    const where = query.search
-      ? {
-          OR: [
-            { challanNumber: { contains: query.search, mode: "insensitive" as const } },
-            { customer: { name: { contains: query.search, mode: "insensitive" as const } } },
-            { customer: { businessName: { contains: query.search, mode: "insensitive" as const } } }
-          ]
-        }
-      : {};
+    const query = challanListQuery.parse(req.query);
+    const where = {
+      ...(query.search
+        ? {
+            OR: [
+              { challanNumber: { contains: query.search, mode: "insensitive" as const } },
+              { customer: { name: { contains: query.search, mode: "insensitive" as const } } },
+              { customer: { businessName: { contains: query.search, mode: "insensitive" as const } } }
+            ]
+          }
+        : {}),
+      ...(query.status ? { status: query.status as ChallanStatus } : {})
+    };
     const [items, total] = await Promise.all([
       prisma.salesChallan.findMany({
         where,
