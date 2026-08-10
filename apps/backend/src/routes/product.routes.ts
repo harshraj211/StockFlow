@@ -8,7 +8,7 @@ import { paginationQuery, productSchema, stockMovementSchema } from "../validato
 export const productRouter = Router();
 productRouter.use(requireAuth);
 
-// GET /products — list with search + pagination
+// GET /products  list with search + pagination
 productRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -36,7 +36,7 @@ productRouter.get(
   })
 );
 
-// POST /products — create product (ADMIN, WAREHOUSE)
+// POST /products  create product (ADMIN, WAREHOUSE)
 productRouter.post(
   "/",
   requireRoles(Role.ADMIN, Role.WAREHOUSE),
@@ -49,7 +49,7 @@ productRouter.post(
   })
 );
 
-// GET /products/:id — single product with last 10 movements
+// GET /products/:id  single product with last 10 movements
 productRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {
@@ -70,7 +70,7 @@ productRouter.get(
   })
 );
 
-// PUT /products/:id — update product (ADMIN, WAREHOUSE)
+// PUT /products/:id  update product (ADMIN, WAREHOUSE)
 productRouter.put(
   "/:id",
   requireRoles(Role.ADMIN, Role.WAREHOUSE),
@@ -89,7 +89,7 @@ productRouter.put(
   })
 );
 
-// GET /products/:id/movements — paginated movement history
+// GET /products/:id/movements  paginated movement history
 productRouter.get(
   "/:id/movements",
   asyncHandler(async (req, res) => {
@@ -112,7 +112,7 @@ productRouter.get(
   })
 );
 
-// POST /products/:id/movements — manual stock adjustment (ADMIN, WAREHOUSE)
+// POST /products/:id/movements  manual stock adjustment (ADMIN, WAREHOUSE)
 productRouter.post(
   "/:id/movements",
   requireRoles(Role.ADMIN, Role.WAREHOUSE),
