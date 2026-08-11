@@ -5,6 +5,7 @@
 ![Express](https://img.shields.io/badge/Express.js-backend-000000?logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma_ORM-4169E1?logo=postgresql&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+[![Quality Checks](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 A full-stack case study for a wholesale/distribution business — authentication and role-based access, customer CRM with follow-up tracking, product inventory with a real stock movement ledger, and a sales challan engine with atomic, race-safe stock deduction.
@@ -17,13 +18,12 @@ If you only have 5 minutes:
 
 | | |
 |---|---|
-| **Live App** | `<add your Vercel/Netlify URL here>` |
-| **Live API** | `<add your Render/Railway URL here>` |
-| **60–90s Demo Video** | `<add your Loom/YouTube link here>` |
-| **API Docs (Swagger)** | `<live-backend-url>/docs` |
+| **Live App** | [stockflow-finance.vercel.app](https://stockflow-finance.vercel.app) |
+| **API Health** | [stockflow-api-x7w3.onrender.com/health](https://stockflow-api-x7w3.onrender.com/health) |
+| **API Docs (Swagger)** | [stockflow-api-x7w3.onrender.com/docs](https://stockflow-api-x7w3.onrender.com/docs) |
 | **Test Credentials** | See [Test Credentials](#test-credentials) below — all roles use `Password@123` |
 
-The single feature worth watching in the demo video: creating a sales challan, confirming it, and watching the API **reject a second confirm that would oversell stock** — that's the core business-logic test this case study is built around, and it's covered end-to-end (see [Design Notes](#design-notes--what-i-learned-building-this) below).
+The single feature worth testing first: create a sales challan, confirm it, then try another confirmation that would oversell stock. The API **rejects the unsafe confirmation without making partial changes** — the core business rule this case study is built around (see [Design Notes](#design-notes--what-i-learned-building-this) below).
 
 ---
 
@@ -52,6 +52,7 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 4. **Race-Safe Business Rules** — stock confirmation uses a conditional atomic decrement, not a check-then-write pattern, so concurrent confirms can't oversell (see [Design Notes](#design-notes--what-i-learned-building-this)).
 5. **Professional Document Output** — challan print view includes branding, customer details, item table, totals, notes, and a signature area.
 6. **Role Demonstration** — Admin, Sales, Warehouse, and Accounts accounts show different permission boundaries clearly in both the UI and the API.
+7. **Reviewer-Ready Experience** — a public product overview, focused login flow, responsive operations workspace, and Light/Dark/System themes make every workflow easy to inspect.
 
 ---
 
@@ -59,7 +60,8 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 
 - **Backend**: Node.js, TypeScript, Express.js, Prisma ORM, PostgreSQL, JWT, Zod, Helmet, Express Rate Limit
 - **Frontend**: React 19, TypeScript, Vite, CSS (Vanilla Design System)
-- **DevOps**: Docker Compose (PostgreSQL), environment-based configuration
+- **DevOps**: Docker Compose (local PostgreSQL), GitHub Actions CI, environment-based configuration
+- **Hosting**: Vercel (frontend), Render (API), Supabase (PostgreSQL)
 
 ---
 
@@ -71,12 +73,13 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 - **Health Check API**: `GET /health` runs a live database ping (`SELECT 1`) and reports required-env readiness.
 - **Swagger/OpenAPI Docs**: `GET /docs` serves interactive API documentation; `GET /openapi.json` exposes the raw contract.
 - **Executive Dashboard KPIs**: `GET /dashboard/stats` returns revenue, active/lead breakdowns, low-stock items, upcoming follow-ups, and recent challans.
-- **Customer CRM Module**: full CRUD, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
+- **Customer CRM Module**: create/read/update workflows, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
 - **Product & Inventory Module**: SKU uniqueness enforcement, category/location tracking, stock-level warnings, and a full IN/OUT stock movement audit log with reason and user attribution.
 - **Sales Challan Engine**: multi-product draft/confirmed creation, retry-safe sequential numbers (`CH-2026-00001`), snapshotting of product details, total amount computation, and atomic guarded stock decrements that never let stock go negative.
 - **Challan Status History**: every lifecycle event stored with from/to status, note, actor, role, and timestamp for full auditability.
 - **Admin User Management**: list, register, adjust roles, activate/deactivate accounts.
-- **Operational UI Polish**: route-based record URLs, notification deep-links, product filters, low-stock view, manual stock entry, challan lifecycle timeline, browser print, server-generated PDF, pagination, role-aware read-only states.
+- **Operational UI Polish**: responsive role-aware navigation, hidden unauthorized modules, Light/Dark/System themes, route-based record URLs, notification deep-links, filters, low-stock review, manual stock entry, challan lifecycle timeline, browser print, server-generated PDF, pagination, loading states, and empty states.
+- **Automated Quality Gate**: GitHub Actions installs dependencies, generates Prisma Client, runs backend tests, and builds both applications on pushes and pull requests.
 - **Backend Test Coverage**: unit tests for login, role denial, negative stock prevention, challan confirmation — plus an optional real-Postgres integration suite (see [Local Setup](#local-setup)).
 
 ---
@@ -149,7 +152,7 @@ The integration suite creates and removes only its own `integration-*` records a
 
 ## API Endpoints Reference
 
-All endpoints (except `/auth/login` and `/health`) require `Authorization: Bearer <token>`.
+Business endpoints require `Authorization: Bearer <token>`. `/auth/login`, `/health`, `/docs`, and `/openapi.json` are public.
 
 ### Auth, Docs & Health
 - `GET  /health` — live database status check
@@ -251,7 +254,6 @@ Being upfront about scope boundaries and tradeoffs made under the assignment's t
 - **No refresh-token flow.** Auth issues a single JWT on login with a fixed expiry; there's no silent-refresh or long-lived session handling, which a production system would want.
 - **No file/image upload.** Product photos and document attachments (e.g. scanned PO) aren't supported — S3 upload was considered but deprioritized in favor of correctness-critical backend work.
 - **Frontend is a single-file React app (`App.tsx`).** It works and is fully functional, but isn't split into `pages/`/`components/` the way a larger production codebase would be — a conscious tradeoff to prioritize backend business logic within the time available.
-- **No CI pipeline.** Tests and build run locally/on-demand; there's no GitHub Actions workflow gating merges yet.
 
 ---
 
@@ -266,18 +268,20 @@ Being upfront about scope boundaries and tradeoffs made under the assignment's t
 
 ## Deployment
 
-<!-- Fill this in once deployed -->
-- **Database**: `<Neon / Supabase / Render Postgres — add connection details or just confirm deployed>`
-- **Backend**: `<Render / Railway / Fly.io URL>`
-- **Frontend**: `<Vercel / Netlify URL>`
+- **Frontend**: [StockFlow on Vercel](https://stockflow-finance.vercel.app)
+- **Backend**: [StockFlow API on Render](https://stockflow-api-x7w3.onrender.com/health)
+- **API Documentation**: [Swagger UI](https://stockflow-api-x7w3.onrender.com/docs)
+- **Database**: Supabase managed PostgreSQL
+- **Continuous Integration**: [GitHub Actions quality checks](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml)
 
-To deploy:
+The Render free instance may need a short cold start after a period of inactivity. The frontend remains available while the API wakes up.
+
+Deployment configuration:
 1. Provision a Postgres instance (Neon/Supabase/Render).
 2. Deploy `apps/backend` with env vars `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `FRONTEND_URL`, `PORT`.
 3. Run `pnpm --filter backend exec prisma migrate deploy` against the production database.
 4. Seed demo credentials (only if this deployment is for review purposes).
 5. Deploy `apps/frontend` with `VITE_API_URL` pointing at the live backend.
-6. Update the links in [For Reviewers](#-for-reviewers--start-here) above.
 
 ---
 
@@ -289,8 +293,10 @@ To deploy:
 - ✅ Architecture Notes — [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 - ✅ Seeded Credentials — Admin, Sales, Warehouse, Accounts (`Password@123`)
 - ✅ README — setup, architecture, API spec, known limitations
-- ⬜ Live Frontend URL — *add before submitting*
-- ⬜ Live Backend URL — *add before submitting*
+- ✅ Live Frontend — [Vercel](https://stockflow-finance.vercel.app)
+- ✅ Live Backend — [Render](https://stockflow-api-x7w3.onrender.com/health)
+- ✅ Managed PostgreSQL — Supabase
+- ✅ GitHub Actions — automated test and build checks
 - ⬜ Demo Recording — *add before submitting*
 
 ---
