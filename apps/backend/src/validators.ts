@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+const noMarkup = (label: string) =>
+  z
+    .string()
+    .trim()
+    .max(2000, `${label} must be 2000 characters or fewer`)
+    .refine((value) => !/<[^>]*>/u.test(value), `${label} cannot contain HTML markup`);
+
 export const paginationQuery = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(10),
@@ -42,11 +49,11 @@ export const customerSchema = z.object({
   status: z.enum(["LEAD", "ACTIVE", "INACTIVE"]),
   priority: z.enum(["HOT", "WARM", "COLD"]).default("WARM"),
   followUpDate: z.string().datetime().optional().nullable(),
-  notes: z.string().optional().nullable()
+  notes: noMarkup("Notes").optional().nullable()
 });
 
 export const followUpSchema = z.object({
-  note: z.string().min(2, "Note must be at least 2 characters")
+  note: noMarkup("Follow-up note").min(2, "Note must be at least 2 characters")
 });
 
 export const productSchema = z.object({
@@ -62,13 +69,13 @@ export const productSchema = z.object({
 export const stockMovementSchema = z.object({
   quantity: z.coerce.number().int().positive("Quantity must be a positive integer"),
   type: z.enum(["IN", "OUT"]),
-  reason: z.string().min(2, "Reason must be at least 2 characters")
+  reason: noMarkup("Reason").min(2, "Reason must be at least 2 characters")
 });
 
 export const challanSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
   status: z.enum(["DRAFT", "CONFIRMED"]).default("DRAFT"),
-  notes: z.string().optional().nullable(),
+  notes: noMarkup("Notes").optional().nullable(),
   items: z
     .array(
       z.object({
@@ -84,13 +91,20 @@ export const challanStatusSchema = z.object({
 });
 
 export const updateChallanNotesSchema = z.object({
-  notes: z.string().nullable()
+  notes: noMarkup("Notes").nullable()
 });
 
 export const createUserSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z
+    .string()
+    .min(10, "Password must be at least 10 characters")
+    .max(128, "Password must be 128 characters or fewer")
+    .regex(/[a-z]/, "Password must include a lowercase letter")
+    .regex(/[A-Z]/, "Password must include an uppercase letter")
+    .regex(/[0-9]/, "Password must include a number")
+    .regex(/[^A-Za-z0-9]/, "Password must include a special character"),
   role: z.enum(["ADMIN", "SALES", "WAREHOUSE", "ACCOUNTS"])
 });
 
