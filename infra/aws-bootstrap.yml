@@ -45,11 +45,11 @@ Resources:
             "rules": [
               {
                 "rulePriority": 1,
-                "description": "Keep the ten newest StockFlow API images",
+                "description": "Keep the three newest StockFlow API images",
                 "selection": {
                   "tagStatus": "any",
                   "countType": "imageCountMoreThan",
-                  "countNumber": 10
+                  "countNumber": 3
                 },
                 "action": { "type": "expire" }
               }

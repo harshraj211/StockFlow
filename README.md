@@ -1,6 +1,6 @@
 # StockFlow — Mini ERP + CRM Operations Portal
 
-![Node](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
+![Node](https://img.shields.io/badge/Node.js-22-339933?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![Express](https://img.shields.io/badge/Express.js-backend-000000?logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma_ORM-4169E1?logo=postgresql&logoColor=white)
@@ -14,13 +14,15 @@ A full-stack case study for a wholesale/distribution business — authentication
 
 ## Live Deployment — Reviewer Links
 
-These are the production URLs requested for evaluation. The Vercel frontend communicates with the Render API, backed by Supabase PostgreSQL.
+These are the production URLs requested for evaluation. The application is available both as the original Vercel/Render deployment and as a complete AWS serverless deployment backed by the same Supabase PostgreSQL database.
 
 | | |
 |---|---|
 | **Frontend (Vercel)** | [stockflow-finance.vercel.app](https://stockflow-finance.vercel.app) |
 | **Backend API (Render)** | [stockflow-api-x7w3.onrender.com/health](https://stockflow-api-x7w3.onrender.com/health) |
 | **Interactive API Docs (Swagger)** | [stockflow-api-x7w3.onrender.com/docs](https://stockflow-api-x7w3.onrender.com/docs) |
+| **Full AWS Deployment** | [StockFlow on AWS](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com) |
+| **AWS Health / API Docs** | [Health](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/health) / [Swagger](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/docs) |
 | **Test Credentials** | See [Test Credentials](#test-credentials) below — all roles use `Password@123` |
 
 The single feature worth testing first: create a sales challan, confirm it, then try another confirmation that would oversell stock. The API **rejects the unsafe confirmation without making partial changes** — the core business rule this case study is built around (see [Design Notes](#design-notes--what-i-learned-building-this) below).
@@ -62,8 +64,8 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 
 - **Backend**: Node.js, TypeScript, Express.js, Prisma ORM, PostgreSQL, JWT, Zod, Helmet, Express Rate Limit
 - **Frontend**: React 19, TypeScript, Vite, CSS (Vanilla Design System)
-- **DevOps**: Docker Compose (local PostgreSQL), GitHub Actions CI, environment-based configuration
-- **Hosting**: Vercel (frontend), Render (API), Supabase (PostgreSQL), AWS S3 (private product images)
+- **DevOps**: full-stack Docker Compose, GitHub Actions CI/CD with AWS OIDC, CloudFormation, ECR, environment-based configuration
+- **Hosting**: AWS API Gateway + Lambda container (full app), Vercel (frontend), Render (API), Supabase (PostgreSQL), AWS S3 (private product images)
 
 ---
 
@@ -81,7 +83,7 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 - **Challan Status History**: every lifecycle event stored with from/to status, note, actor, role, and timestamp for full auditability.
 - **Admin User Management**: list, register, adjust roles, activate/deactivate accounts.
 - **Operational UI Polish**: responsive role-aware navigation, hidden unauthorized modules, Light/Dark/System themes, route-based record URLs, notification deep-links, filters, low-stock review, manual stock entry, challan lifecycle timeline, browser print, server-generated PDF, pagination, loading states, and empty states.
-- **Automated Quality Gate**: GitHub Actions installs dependencies, generates Prisma Client, runs backend tests, and builds both applications on pushes and pull requests.
+- **Automated Quality Gate and Deployment**: GitHub Actions installs dependencies, generates Prisma Client, runs backend tests, builds both applications, validates both production Docker images, and deploys `main` to AWS through short-lived OIDC credentials.
 - **Backend Test Coverage**: unit tests for login, role denial, negative stock prevention, challan confirmation — plus an optional real-Postgres integration suite (see [Local Setup](#local-setup)).
 
 ---
@@ -101,6 +103,19 @@ All seeded accounts use the password: `Password@123`
 
 ## Local Setup
 
+### Full Stack with Docker
+
+Run PostgreSQL, the Express API, and the Nginx-served React app together:
+
+```bash
+docker compose up --build -d
+docker compose exec backend pnpm --filter backend db:seed
+```
+
+Open `http://localhost:8080`. The API, health endpoint, and Swagger docs are available on port `4000`. The seed command is only needed the first time a new database volume is created.
+
+### Manual Development Setup
+
 ### 1. Install Dependencies
 ```bash
 pnpm install
@@ -112,9 +127,9 @@ cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env
 ```
 
-### 3. Start Database (PostgreSQL)
+### 3. Start Database Only (PostgreSQL)
 ```bash
-docker compose up -d
+docker compose up -d postgres
 ```
 *(Alternatively, supply your own PostgreSQL connection string in `apps/backend/.env`)*
 
@@ -273,12 +288,19 @@ Being upfront about scope boundaries and tradeoffs made under the assignment's t
 
 ## Deployment
 
+- **AWS Full Application**: [StockFlow on API Gateway + Lambda](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com)
+- **AWS Health Check**: [Live health](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/health)
+- **AWS API Documentation**: [Swagger UI](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/docs)
 - **Frontend**: [StockFlow on Vercel](https://stockflow-finance.vercel.app)
 - **Backend**: [StockFlow API on Render](https://stockflow-api-x7w3.onrender.com/health)
 - **API Documentation**: [Swagger UI](https://stockflow-api-x7w3.onrender.com/docs)
 - **Database**: Supabase managed PostgreSQL
 - **Product Media**: private AWS S3 bucket with Block Public Access and short-lived presigned URLs
-- **Continuous Integration**: [GitHub Actions quality checks](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml)
+- **Continuous Delivery**: [GitHub Actions quality checks and AWS deployment](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml)
+
+Every push to `main` must pass tests, application builds, Docker image builds, and Compose validation before deployment. GitHub then assumes a least-privilege AWS role through OIDC, publishes the immutable Lambda image to ECR, applies Prisma migrations, updates the CloudFormation stack, configures S3 CORS, and smoke-tests production. No long-lived AWS access keys are stored in GitHub.
+
+The AWS deployment serves the React application and Express API from one API Gateway URL. Lambda provides scale-to-zero compute, ECR stores immutable application images, Supabase supplies PostgreSQL, and the private S3 bucket stores product images.
 
 The Render free instance may need a short cold start after a period of inactivity. The frontend remains available while the API wakes up.
 
@@ -288,6 +310,8 @@ Deployment configuration:
 3. Start the backend with `pnpm --filter backend start`; it applies pending Prisma migrations before starting the API.
 4. Seed demo credentials (only if this deployment is for review purposes).
 5. Deploy `apps/frontend` with `VITE_API_URL` pointing at the live backend.
+
+AWS infrastructure is reproducible from [`infra/aws-bootstrap.yml`](./infra/aws-bootstrap.yml) and [`infra/aws-app.yml`](./infra/aws-app.yml). The bootstrap stack creates the ECR repository and GitHub OIDC deployment role; the application stack owns API Gateway, Lambda, its execution role, and retained logs.
 
 ---
 
@@ -302,5 +326,8 @@ Deployment configuration:
 - ✅ Live Frontend — [Vercel](https://stockflow-finance.vercel.app)
 - ✅ Live Backend — [Render](https://stockflow-api-x7w3.onrender.com/health)
 - ✅ Managed PostgreSQL — Supabase
-- ✅ GitHub Actions — automated test and build checks
+- ✅ Full-stack Docker — PostgreSQL, Express API, and Nginx/React frontend
+- ✅ GitHub Actions Deployment — test, build, Docker validation, OIDC, ECR, CloudFormation, and production smoke test
+- ✅ AWS Deployment — API Gateway + Lambda container with Supabase PostgreSQL
+- ✅ Export Invoice as PDF — server-generated sales challan PDF
 - ✅ AWS S3 Product Images — private bucket, least-privilege IAM, presigned upload/read URLs

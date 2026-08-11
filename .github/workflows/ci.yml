@@ -45,6 +45,12 @@ jobs:
       - name: Build all applications
         run: pnpm build
 
+      - name: Validate full-stack Docker setup
+        run: |
+          docker compose config --quiet
+          docker build --file apps/backend/Dockerfile --tag stockflow-backend:ci .
+          docker build --file apps/frontend/Dockerfile --tag stockflow-frontend:ci .
+
   deploy-aws:
     name: Deploy to AWS
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

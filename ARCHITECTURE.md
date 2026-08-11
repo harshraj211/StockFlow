@@ -11,6 +11,23 @@ StockFlow is a mini ERP + CRM portal for wholesale inventory, customer follow-up
 - **Admin**: JWT login, roles, user management, activity logging, and access boundaries.
 - **Operations Dashboard**: KPIs, follow-up queue, low-stock alerts, recent challans, and audit visibility.
 
+## AWS Deployment Topology
+
+```mermaid
+flowchart LR
+  U["Reviewer browser"] --> G["AWS API Gateway"]
+  G --> L["Lambda container: React + Express"]
+  L --> P["Supabase PostgreSQL"]
+  L --> S["Private AWS S3 product images"]
+  GH["GitHub Actions"] -->|"OIDC temporary role"| E["Amazon ECR"]
+  GH -->|"CloudFormation deploy"| G
+  E --> L
+```
+
+The production container serves the compiled React application and Express API through one API Gateway origin. This avoids an always-on server while preserving the existing Vercel and Render deployment as a fallback. Infrastructure is declared in CloudFormation, and every `main` deployment is gated by tests, application builds, Docker builds, database migration, and a production smoke test.
+
+GitHub does not store long-lived AWS access keys. Its workflow exchanges GitHub's OIDC identity for a short-lived, repository- and branch-scoped AWS role. Lambda uses its own execution role for private S3 access, including the temporary session token required when signing browser uploads.
+
 ## Challan Confirmation Flow
 
 ```mermaid
