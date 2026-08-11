@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { ActivityEntityType, ChallanStatus, MovementType, Role } from "@prisma/client";
+import { ActivityEntityType, ChallanStatus, MovementType, Prisma, Role } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
@@ -11,9 +11,70 @@ export const challanRouter = Router();
 challanRouter.use(requireAuth);
 
 /** Generates the next sequential challan number: CH-2026-00001 */
-async function nextChallanNumber() {
-  const count = await prisma.salesChallan.count();
-  return `CH-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`;
+async function nextChallanNumber(tx: Prisma.TransactionClient) {
+  const year = new Date().getFullYear();
+  const prefix = `CH-${year}-`;
+  const latest = await tx.salesChallan.findFirst({
+    where: { challanNumber: { startsWith: prefix } },
+    orderBy: { challanNumber: "desc" },
+    select: { challanNumber: true }
+  });
+  const latestSequence = latest ? Number(latest.challanNumber.slice(prefix.length)) : 0;
+  return `${prefix}${String(latestSequence + 1).padStart(5, "0")}`;
+}
+
+async function createDraftChallanWithRetry(
+  data: Omit<Prisma.SalesChallanCreateInput, "challanNumber" | "statusHistory"> & {
+    customer: Prisma.CustomerCreateNestedOneWithoutChallansInput;
+    createdBy: Prisma.UserCreateNestedOneWithoutChallansInput;
+    items: Prisma.SalesChallanItemCreateNestedManyWithoutChallanInput;
+  },
+  changedById: string,
+  initialHistoryNote: string
+) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const challanNumber = await nextChallanNumber(tx);
+        const challan = await tx.salesChallan.create({
+          data: {
+            ...data,
+            challanNumber,
+            status: ChallanStatus.DRAFT
+          },
+          include: {
+            customer: true,
+            items: true,
+            createdBy: { select: { name: true, role: true } },
+            statusHistory: {
+              include: { changedBy: { select: { name: true, role: true } } },
+              orderBy: { createdAt: "asc" }
+            }
+          }
+        });
+        await tx.challanStatusHistory.create({
+          data: {
+            challanId: challan.id,
+            fromStatus: null,
+            toStatus: ChallanStatus.DRAFT,
+            note: initialHistoryNote,
+            changedById
+          }
+        });
+        return challan;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002" &&
+        attempt < 2
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new HttpError(500, "Could not generate a unique challan number");
 }
 
 /** Core transaction: deducts stock and marks challan CONFIRMED */
@@ -28,23 +89,28 @@ async function confirmChallan(challanId: string, userId: string) {
     if (challan.status === ChallanStatus.CANCELLED)
       throw new HttpError(400, "A cancelled challan cannot be confirmed");
 
-    // Check stock for all items atomically before touching anything
+    // Ensure each product still exists before attempting conditional decrements.
     for (const item of challan.items) {
       const product = await tx.product.findUnique({ where: { id: item.productId } });
       if (!product) throw new HttpError(404, `Product "${item.productName}" no longer exists`);
-      if (product.currentStock < item.quantity)
-        throw new HttpError(
-          400,
-          `Insufficient stock for "${product.name}". Available: ${product.currentStock}, required: ${item.quantity}`
-        );
     }
 
-    // Deduct stock and log movements
+    // Deduct stock with an atomic stock guard per row to avoid overselling under concurrency.
     for (const item of challan.items) {
-      await tx.product.update({
-        where: { id: item.productId },
+      const updated = await tx.product.updateMany({
+        where: {
+          id: item.productId,
+          currentStock: { gte: item.quantity }
+        },
         data: { currentStock: { decrement: item.quantity } }
       });
+      if (updated.count === 0) {
+        const currentProduct = await tx.product.findUnique({ where: { id: item.productId } });
+        throw new HttpError(
+          400,
+          `Insufficient stock for "${item.productName}". Available: ${currentProduct?.currentStock ?? 0}, required: ${item.quantity}`
+        );
+      }
       await tx.stockMovement.create({
         data: {
           productId: item.productId,
@@ -154,20 +220,18 @@ challanRouter.post(
       }
     }
 
-    const challan = await prisma.salesChallan.create({
-      data: {
-        challanNumber: await nextChallanNumber(),
-        customerId: body.customerId,
+    const challan = await createDraftChallanWithRetry(
+      {
+        customer: { connect: { id: body.customerId } },
         totalQuantity,
         totalAmount,
         notes: body.notes ?? null,
-        status: ChallanStatus.DRAFT,
-        createdById: req.user!.id,
+        createdBy: { connect: { id: req.user!.id } },
         items: {
           create: body.items.map((item) => {
             const product = productMap.get(item.productId)!;
             return {
-              productId: product.id,
+              product: { connect: { id: product.id } },
               productName: product.name,
               sku: product.sku,
               category: product.category,
@@ -178,25 +242,9 @@ challanRouter.post(
           })
         }
       },
-      include: {
-        customer: true,
-        items: true,
-        createdBy: { select: { name: true, role: true } },
-        statusHistory: {
-          include: { changedBy: { select: { name: true, role: true } } },
-          orderBy: { createdAt: "asc" }
-        }
-      }
-    });
-    await prisma.challanStatusHistory.create({
-      data: {
-        challanId: challan.id,
-        fromStatus: null,
-        toStatus: ChallanStatus.DRAFT,
-        note: body.status === "CONFIRMED" ? "Challan created before confirmation" : "Draft challan created",
-        changedById: req.user!.id
-      }
-    });
+      req.user!.id,
+      body.status === "CONFIRMED" ? "Challan created before confirmation" : "Draft challan created"
+    );
 
     if (body.status === "CONFIRMED") {
       const confirmed = await confirmChallan(challan.id, req.user!.id);
