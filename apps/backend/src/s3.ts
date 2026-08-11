@@ -33,7 +33,11 @@ function getS3Client() {
   if (!s3Client) {
     const credentials =
       config.awsAccessKeyId && config.awsSecretAccessKey
-        ? { accessKeyId: config.awsAccessKeyId, secretAccessKey: config.awsSecretAccessKey }
+        ? {
+            accessKeyId: config.awsAccessKeyId,
+            secretAccessKey: config.awsSecretAccessKey,
+            ...(config.awsSessionToken ? { sessionToken: config.awsSessionToken } : {})
+          }
         : undefined;
     s3Client = new S3Client({ region, credentials });
   }
