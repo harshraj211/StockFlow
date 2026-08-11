@@ -1,27 +1,58 @@
-**Findings**
-- [P0] Browser-rendered implementation capture is blocked
-  Location: StockFlow local preview at `http://127.0.0.1:4173` / `http://terminal.local:4173`.
-  Evidence: The selected source visual is available at `C:/Users/harsh/.codex/generated_images/019feb6c-713a-7be0-bbae-85cce587963e/call_QxsqHCJOHlUOfVNN8lobiqaa.png`, but the in-app browser could not open the implementation. `127.0.0.1` returned `net::ERR_BLOCKED_BY_CLIENT`; `terminal.local` returned `net::ERR_NAME_NOT_RESOLVED`.
-  Impact: A Product Design pass requires visual comparison of the source image and browser-rendered implementation before final handoff.
-  Fix: Open the app in a reachable browser surface after starting the frontend preview, then capture the dashboard state at 1440 x 1024 and compare against the source image.
+# StockFlow Design QA
 
-**Open Questions**
-- None about the selected direction. The chosen visual target is option 1, branded as StockFlow.
+## Evidence
 
-**Implementation Checklist**
-- Source visual truth path: `C:/Users/harsh/.codex/generated_images/019feb6c-713a-7be0-bbae-85cce587963e/call_QxsqHCJOHlUOfVNN8lobiqaa.png`
-- Implementation screenshot path: unavailable because browser capture was blocked.
-- Viewport: intended 1440 x 1024 desktop web app.
-- State: StockFlow dashboard after Admin login, with offline demo data if the API is unavailable.
-- Source dimensions: 1488 x 1058 px.
-- Implementation dimensions: unavailable because browser capture was blocked.
-- Density normalization: not performed because implementation capture was unavailable.
-- Console errors checked: blocked before page load.
-- Primary interactions tested: blocked before page load.
-- Full-view comparison evidence: unavailable.
-- Focused region comparison evidence: unavailable because the full-view capture was blocked.
+- Source visual truth, light: `C:\Users\harsh\.codex\generated_images\019feb6c-713a-7be0-bbae-85cce587963e\exec-ea0b2752-b654-4660-8b61-939e4b265e32.png`
+- Source visual truth, dark palette: `C:\Users\harsh\.codex\generated_images\019feb6c-713a-7be0-bbae-85cce587963e\exec-aa38a872-e93d-4357-a930-11bda391fe3a.png`
+- Implementation, light: `.design-qa\stockflow-light-1440x1024.png`
+- Implementation, dark: `.design-qa\stockflow-dark-1440x1024.png`
+- Implementation, mobile: `.design-qa\stockflow-mobile-390x844.png`
+- Full comparison, light: `.design-qa\comparison-light.png`
+- Full comparison, dark: `.design-qa\comparison-dark.png`
+- Desktop viewport and CSS size: 1440 x 1024 at device scale 1.
+- Mobile viewport and CSS size: 390 x 844 at device scale 1.
+- Source and implementation captures were normalized to 1440 x 1024 for side-by-side review.
+- State: Admin overview with populated offline demo data; light and dark themes. Sales mobile overview and Warehouse role visibility were also checked.
 
-**Follow-up Polish**
-- Re-run visual QA in a reachable browser session and tune P3 details such as metric card spacing, right rail density, and dashboard table row height.
+## Full-View Comparison
 
-final result: blocked
+The implementation retains the selected Option 3 structure: 64 px icon dock, horizontal module navigation, compact page header, command summary rail, dominant exception ledger, recent movement ledger, and fixed inspection panel. The light implementation uses the selected neutral/crimson system. Dark mode preserves this structure while using Option 2's graphite, warm-ivory, wine, amber, and brick-red palette.
+
+The source uses different example records and a denser stock-history chart. The implementation intentionally renders live/demo project records and a semantic stock-position meter. These are content and product-behavior differences, not hierarchy or visual-system drift.
+
+Focused crops were not required because both source and implementation are native desktop captures normalized to the same 1440 x 1024 size, and the typography, navigation, table rows, status treatment, and inspection panel remain legible in the full comparison files.
+
+## Required Fidelity Surfaces
+
+- Fonts and typography: Passed. Inter and IBM Plex Mono reproduce the source's neutral sans and tabular numeric treatment. UI sizing stays compact, letter spacing is 0, and long records wrap without overlapping controls.
+- Spacing and layout rhythm: Passed. Major tracks, dock width, table density, inspection-panel proportion, 1 px rules, 3-4 px radii, and low-elevation surfaces match the selected direction.
+- Colors and visual tokens: Passed. No green or blue tokens remain. Light mode is off-white/graphite/crimson/saffron; dark mode uses `#171717`, `#20201f`, `#262624`, `#f2efe8`, `#a8a39a`, `#6e3f52`, `#c08a36`, and `#b85245`.
+- Image quality and assets: Passed. The signed-in workspace does not require raster imagery; Lucide supplies consistent functional icons. The existing warehouse image remains correctly cropped on login.
+- Copy and content: Passed. Operational labels are concise and role-specific. Restricted modules and their dashboard records are absent rather than disabled.
+
+## Interaction And Responsive Checks
+
+- Light, Dark, and System theme choices work and persist.
+- Admin, Sales, and Warehouse demo login states were verified.
+- Warehouse hides Customers, CRM follow-ups, and revenue while retaining Inventory, Challans, and Activity.
+- Sales hides Inventory and low-stock details while retaining Customers, revenue, follow-ups, and Challans.
+- Customer, product, challan, and user creation forms are progressive-disclosure panels rather than permanent columns.
+- Dashboard New challan opens the creation form directly; cancel returns to `/challans`.
+- Mobile navigation opens correctly, hides unavailable Sales modules, and the page has no viewport-level horizontal overflow.
+- The mobile exception ledger reflows into readable action rows.
+- Browser console check: no errors or warnings.
+- Production frontend build: passed.
+
+## Comparison History
+
+1. Initial pass found three P2 issues: raw Network Error banner disrupted the target hierarchy; create forms permanently occupied list pages; role-restricted dashboard records remained visible.
+2. Fixes: removed raw network failure chrome when demo fallback succeeds, moved create forms behind explicit actions, and made summary metrics and exception rows role-aware.
+3. Responsive pass found a P2 horizontal ledger presentation issue on 390 px mobile.
+4. Fix: reflowed exception rows into a mobile two-column action layout and hid internal scrollbars while preserving semantic table markup.
+5. Final desktop and mobile captures show no remaining P0, P1, or P2 findings.
+
+## Follow-Up Polish
+
+- P3: replace the semantic stock meter with a richer historical chart when the backend exposes time-series inventory snapshots.
+
+final result: passed
