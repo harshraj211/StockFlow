@@ -2013,6 +2013,21 @@ th {
   gap: 18px;
 }
 
+/* The dashboard leads with only current decisions; detailed records live in their modules. */
+.ops-layout {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1280px;
+}
+
+.ops-layout .detail-rail,
+.dashboard-stack > .dashboard-grid + .dashboard-grid {
+  display: none;
+}
+
+.dashboard-stack > .dashboard-grid {
+  max-width: 960px;
+}
+
 .alert-strip {
   background: transparent;
   border: 0;
