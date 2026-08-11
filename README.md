@@ -12,15 +12,15 @@ A full-stack case study for a wholesale/distribution business — authentication
 
 ---
 
-## 🎥 For Reviewers — Start Here
+## Live Deployment — Reviewer Links
 
-If you only have 5 minutes:
+These are the production URLs requested for evaluation. The Vercel frontend communicates with the Render API, backed by Supabase PostgreSQL.
 
 | | |
 |---|---|
-| **Live App** | [stockflow-finance.vercel.app](https://stockflow-finance.vercel.app) |
-| **API Health** | [stockflow-api-x7w3.onrender.com/health](https://stockflow-api-x7w3.onrender.com/health) |
-| **API Docs (Swagger)** | [stockflow-api-x7w3.onrender.com/docs](https://stockflow-api-x7w3.onrender.com/docs) |
+| **Frontend (Vercel)** | [stockflow-finance.vercel.app](https://stockflow-finance.vercel.app) |
+| **Backend API (Render)** | [stockflow-api-x7w3.onrender.com/health](https://stockflow-api-x7w3.onrender.com/health) |
+| **Interactive API Docs (Swagger)** | [stockflow-api-x7w3.onrender.com/docs](https://stockflow-api-x7w3.onrender.com/docs) |
 | **Test Credentials** | See [Test Credentials](#test-credentials) below — all roles use `Password@123` |
 
 The single feature worth testing first: create a sales challan, confirm it, then try another confirmation that would oversell stock. The API **rejects the unsafe confirmation without making partial changes** — the core business rule this case study is built around (see [Design Notes](#design-notes--what-i-learned-building-this) below).
@@ -29,6 +29,7 @@ The single feature worth testing first: create a sales challan, confirm it, then
 
 ## Table of Contents
 
+- [Live Deployment](#live-deployment--reviewer-links)
 - [What Makes StockFlow Different](#what-makes-stockflow-different)
 - [Tech Stack](#tech-stack)
 - [Test Credentials](#test-credentials)
