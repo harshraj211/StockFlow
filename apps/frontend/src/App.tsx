@@ -2369,7 +2369,7 @@ function ActivityView({ activities, page, total, setPage, loading, entityFilter,
         <div className="activity-list">
           {!loading && filteredActivities.map((activity) => (
             <article className="activity-row" key={activity.id}>
-              <div>
+              <div className="activity-content">
                 <StatusBadge label={activity.entityType} tone={toneByEntity[activity.entityType]} />
                 <strong>{activity.title}</strong>
                 {activity.details && <p>{activity.details}</p>}
