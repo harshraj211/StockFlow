@@ -154,21 +154,24 @@ productRouter.post(
     const product = await prisma.product.findUnique({ where: { id } });
     if (!product) throw new HttpError(404, "Product not found");
 
-    const nextStock =
-      body.type === "IN"
-        ? product.currentStock + body.quantity
-        : product.currentStock - body.quantity;
-    if (nextStock < 0)
-      throw new HttpError(
-        400,
-        `Insufficient stock. Available: ${product.currentStock}, requested OUT: ${body.quantity}`
-      );
-
     const result = await prisma.$transaction(async (tx) => {
-      const updated = await tx.product.update({
-        where: { id: product.id },
-        data: { currentStock: nextStock }
+      const updatedCount = await tx.product.updateMany({
+        where:
+          body.type === "OUT"
+            ? { id: product.id, currentStock: { gte: body.quantity } }
+            : { id: product.id },
+        data: {
+          currentStock: body.type === "IN" ? { increment: body.quantity } : { decrement: body.quantity }
+        }
       });
+      if (updatedCount.count === 0) {
+        const current = await tx.product.findUnique({ where: { id: product.id } });
+        throw new HttpError(
+          400,
+          `Insufficient stock. Available: ${current?.currentStock ?? 0}, requested OUT: ${body.quantity}`
+        );
+      }
+      const updated = await tx.product.findUniqueOrThrow({ where: { id: product.id } });
       const movement = await tx.stockMovement.create({
         data: {
           productId: product.id,
