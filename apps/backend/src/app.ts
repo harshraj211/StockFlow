@@ -17,6 +17,8 @@ import { activityRouter } from "./routes/activity.routes.js";
 
 export const app = express();
 
+// Render forwards requests through one reverse proxy.
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(cors({ origin: config.frontendUrl, credentials: true }));
 app.use(express.json());
