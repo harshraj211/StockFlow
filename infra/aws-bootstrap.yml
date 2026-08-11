@@ -2,9 +2,9 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: One-time OIDC bootstrap for StockFlow GitHub Actions deployments.
 
 Parameters:
-  GitHubRepository:
+  GitHubOidcSubject:
     Type: String
-    Default: harshraj211/StockFlow
+    Default: repo:harshraj211@198886825/StockFlow@1329753722:ref:refs/heads/main
 
 Resources:
   GitHubOidcProvider:
@@ -57,8 +57,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:*
+                token.actions.githubusercontent.com:sub: !Ref GitHubOidcSubject
       Policies:
         - PolicyName: StockFlowDeployment
           PolicyDocument:
