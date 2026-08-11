@@ -51,7 +51,6 @@ Resources:
       Architectures: [x86_64]
       MemorySize: 1024
       Timeout: 30
-      ReservedConcurrentExecutions: 6
       Environment:
         Variables:
           NODE_ENV: production
