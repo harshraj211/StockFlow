@@ -1,9 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
 :root {
-  color: #172033;
-  background: #f6f8fb;
-  font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --bg: #faf8f3;
+  --surface: #ffffff;
+  --ink: #1f2430;
+  --ink-muted: #5b6270;
+  --border: #e5e0d5;
+  --primary: #28524c;
+  --primary-hover: #1e3f3a;
+  --accent: #c1682f;
+  --success: #3c6e47;
+  --success-bg: #e4efe6;
+  --danger: #b33b2e;
+  --danger-bg: #f5e4e1;
+  --warning: #b5842a;
+  --warning-bg: #f5ebd8;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-body);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -2723,3 +2740,164 @@ button:hover {
 :root:not([data-theme="dark"]) .panel-toolbar,
 :root:not([data-theme="dark"]) .metric,
 :root:not([data-theme="dark"]) .action-row { border-color: #e8eaed; }
+
+/* StockFlow editorial system */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.amount,
+.qty,
+.sku,
+td.numeric {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+:root:not([data-theme="dark"]) .app-shell,
+:root:not([data-theme="dark"]) .workspace,
+:root:not([data-theme="dark"]) body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+:root:not([data-theme="dark"]) .sidebar,
+:root:not([data-theme="dark"]) .topbar,
+:root:not([data-theme="dark"]) .panel,
+:root:not([data-theme="dark"]) .two-column .panel,
+:root:not([data-theme="dark"]) .activity-page .panel,
+:root:not([data-theme="dark"]) .walkthrough-page .panel,
+:root:not([data-theme="dark"]) .detail-page {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+:root:not([data-theme="dark"]) .sidebar {
+  border-right: 1px solid var(--border);
+}
+
+:root:not([data-theme="dark"]) .brand h2,
+:root:not([data-theme="dark"]) .role-card strong,
+:root:not([data-theme="dark"]) .page-title h1,
+:root:not([data-theme="dark"]) .panel-toolbar h2,
+:root:not([data-theme="dark"]) .metric strong,
+:root:not([data-theme="dark"]) .action-row strong,
+:root:not([data-theme="dark"]) .alert-strip strong {
+  color: var(--ink);
+}
+
+:root:not([data-theme="dark"]) .brand span,
+:root:not([data-theme="dark"]) .sidebar-footer span,
+:root:not([data-theme="dark"]) .copyright,
+:root:not([data-theme="dark"]) .page-title p,
+:root:not([data-theme="dark"]) .metric span,
+:root:not([data-theme="dark"]) .metric small,
+:root:not([data-theme="dark"]) .action-row span,
+:root:not([data-theme="dark"]) .action-row-meta small,
+:root:not([data-theme="dark"]) .alert-strip span {
+  color: var(--ink-muted);
+}
+
+:root:not([data-theme="dark"]) .brand svg,
+:root:not([data-theme="dark"]) .sidebar button.active svg {
+  color: var(--primary);
+}
+
+:root:not([data-theme="dark"]) .sidebar button {
+  color: var(--ink-muted);
+}
+
+:root:not([data-theme="dark"]) .sidebar button:hover {
+  background: #f1eee6;
+  color: var(--ink);
+}
+
+:root:not([data-theme="dark"]) .sidebar button.active,
+:root:not([data-theme="dark"]) .sidebar button.active:hover {
+  background: #e9eee8;
+  border-color: #e9eee8;
+  color: var(--primary);
+}
+
+:root:not([data-theme="dark"]) .sidebar-footer,
+:root:not([data-theme="dark"]) .quick-actions,
+:root:not([data-theme="dark"]) .topbar,
+:root:not([data-theme="dark"]) .alert-strip,
+:root:not([data-theme="dark"]) .panel-toolbar,
+:root:not([data-theme="dark"]) .metric,
+:root:not([data-theme="dark"]) .action-row {
+  border-color: var(--border);
+}
+
+:root:not([data-theme="dark"]) .search,
+:root:not([data-theme="dark"]) .panel-toolbar select,
+:root:not([data-theme="dark"]) .data-table th {
+  background: #f3f0e9;
+}
+
+:root:not([data-theme="dark"]) button {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+:root:not([data-theme="dark"]) button:hover {
+  background: var(--primary-hover);
+}
+
+:root:not([data-theme="dark"]) .secondary,
+:root:not([data-theme="dark"]) .ghost,
+:root:not([data-theme="dark"]) .quiet-button {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--ink);
+}
+
+:root:not([data-theme="dark"]) .secondary:hover,
+:root:not([data-theme="dark"]) .ghost:hover,
+:root:not([data-theme="dark"]) .quiet-button:hover,
+:root:not([data-theme="dark"]) .action-row:hover {
+  background: #f3f0e9;
+  color: var(--ink);
+}
+
+.status-badge {
+  background: transparent;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  padding: 3px 8px;
+  text-transform: uppercase;
+  transform: rotate(-0.6deg);
+}
+
+.status-badge.success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.status-badge.danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.status-badge.warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.status-badge.info {
+  background: #e4eceb;
+  color: var(--primary);
+}
+
+.status-badge.neutral {
+  background: #eeece6;
+  color: var(--ink-muted);
+}
