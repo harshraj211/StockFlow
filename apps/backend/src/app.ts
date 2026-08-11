@@ -21,7 +21,15 @@ export const app = express();
 // Render forwards requests through one reverse proxy.
 app.set("trust proxy", 1);
 app.use(helmet());
-app.use(cors({ origin: config.frontendUrl, credentials: true }));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || config.frontendUrls.includes(origin)) return callback(null, true);
+      return callback(new Error("Origin is not allowed by CORS"));
+    },
+    credentials: true
+  })
+);
 app.use(express.json());
 app.use(
   morgan((tokens, req, res) =>

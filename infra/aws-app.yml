@@ -1,0 +1,207 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: StockFlow serverless API and private CloudFront frontend.
+
+Parameters:
+  BackendImageUri:
+    Type: String
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+  JwtSecret:
+    Type: String
+    NoEcho: true
+  ProductImageBucket:
+    Type: String
+    Default: stockflow-product-images-prod-hr211
+
+Resources:
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub stockflow-web-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Application
+          Value: StockFlow
+
+  FrontendOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: stockflow-frontend-oac
+        Description: Signed CloudFront access to the private StockFlow frontend bucket
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: StockFlow production frontend
+        Enabled: true
+        HttpVersion: http2and3
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_200
+        Origins:
+          - Id: stockflow-private-s3
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !Ref FrontendOriginAccessControl
+            S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: stockflow-private-s3
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+      Tags:
+        - Key: Application
+          Value: StockFlow
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${FrontendBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
+
+  BackendRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: stockflow-lambda-execution
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ProductImageObjects
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ProductImageBucket}/products/*
+
+  BackendFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: stockflow-api-production
+      PackageType: Image
+      Code:
+        ImageUri: !Ref BackendImageUri
+      Role: !GetAtt BackendRole.Arn
+      Architectures: [x86_64]
+      MemorySize: 1024
+      Timeout: 30
+      Environment:
+        Variables:
+          NODE_ENV: production
+          DATABASE_URL: !Ref DatabaseUrl
+          JWT_SECRET: !Ref JwtSecret
+          JWT_EXPIRES_IN: 8h
+          FRONTEND_URL: !Sub https://${FrontendDistribution.DomainName},https://stockflow-finance.vercel.app
+          AWS_S3_BUCKET: !Ref ProductImageBucket
+      Tags:
+        - Key: Application
+          Value: StockFlow
+
+  BackendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/stockflow-api-production
+      RetentionInDays: 14
+
+  BackendApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: stockflow-api-production
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowCredentials: false
+        AllowHeaders: [Authorization, Content-Type]
+        AllowMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        AllowOrigins:
+          - !Sub https://${FrontendDistribution.DomainName}
+          - https://stockflow-finance.vercel.app
+        MaxAge: 600
+
+  BackendIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BackendApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt BackendFunction.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 30000
+
+  BackendRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BackendApi
+      RouteKey: $default
+      Target: !Sub integrations/${BackendIntegration}
+
+  BackendStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref BackendApi
+      StageName: $default
+      AutoDeploy: true
+
+  BackendInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref BackendFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${BackendApi}/*
+
+Outputs:
+  ApiUrl:
+    Value: !GetAtt BackendApi.ApiEndpoint
+  FrontendUrl:
+    Value: !Sub https://${FrontendDistribution.DomainName}
+  FrontendBucketName:
+    Value: !Ref FrontendBucket
+  FrontendDistributionId:
+    Value: !Ref FrontendDistribution
+  FrontendDomainName:
+    Value: !GetAtt FrontendDistribution.DomainName

@@ -1,0 +1,180 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: One-time OIDC bootstrap for StockFlow GitHub Actions deployments.
+
+Parameters:
+  GitHubRepository:
+    Type: String
+    Default: harshraj211/StockFlow
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+      Tags:
+        - Key: Application
+          Value: StockFlow
+
+  BackendRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: stockflow-api
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep the ten newest StockFlow API images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: StockFlowGitHubDeployRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:ref:refs/heads/main
+      Policies:
+        - PolicyName: StockFlowDeployment
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EcrAuthentication
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Sid: EcrImages
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:DescribeImages
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:ListImages
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !GetAtt BackendRepository.Arn
+              - Sid: CloudFormation
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:GetTemplate
+                  - cloudformation:ListStackResources
+                  - cloudformation:UpdateStack
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/stockflow-production/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:aws:transform/*
+              - Sid: CloudFormationTemplateInspection
+                Effect: Allow
+                Action:
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:ValidateTemplate
+                Resource: "*"
+              - Sid: ApplicationIamRoles
+                Effect: Allow
+                Action:
+                  - iam:AttachRolePolicy
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:GetRole
+                  - iam:GetRolePolicy
+                  - iam:ListAttachedRolePolicies
+                  - iam:ListRolePolicies
+                  - iam:PassRole
+                  - iam:PutRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:UpdateAssumeRolePolicy
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/stockflow-*
+              - Sid: LambdaApplication
+                Effect: Allow
+                Action: lambda:*
+                Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:stockflow-*
+              - Sid: ApiGatewayApplication
+                Effect: Allow
+                Action: apigateway:*
+                Resource: "*"
+              - Sid: FrontendBuckets
+                Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:DeleteBucket
+                  - s3:DeleteBucketPolicy
+                  - s3:DeleteObject
+                  - s3:GetBucketLocation
+                  - s3:GetBucketPolicy
+                  - s3:GetBucketPolicyStatus
+                  - s3:GetBucketPublicAccessBlock
+                  - s3:GetBucketTagging
+                  - s3:GetEncryptionConfiguration
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutBucketPolicy
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:PutBucketTagging
+                  - s3:PutEncryptionConfiguration
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::stockflow-web-${AWS::AccountId}-${AWS::Region}
+                  - !Sub arn:${AWS::Partition}:s3:::stockflow-web-${AWS::AccountId}-${AWS::Region}/*
+              - Sid: ProductImageCors
+                Effect: Allow
+                Action:
+                  - s3:GetBucketCORS
+                  - s3:PutBucketCORS
+                Resource: arn:aws:s3:::stockflow-product-images-prod-hr211
+              - Sid: CloudFrontApplication
+                Effect: Allow
+                Action: cloudfront:*
+                Resource: "*"
+              - Sid: ApplicationLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:DeleteLogGroup
+                  - logs:DescribeLogGroups
+                  - logs:ListTagsForResource
+                  - logs:PutRetentionPolicy
+                  - logs:TagResource
+                  - logs:UntagResource
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/stockflow-*
+
+Outputs:
+  DeployRoleArn:
+    Value: !GetAtt GitHubDeployRole.Arn
+  BackendRepositoryUri:
+    Value: !GetAtt BackendRepository.RepositoryUri

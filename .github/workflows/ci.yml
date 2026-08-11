@@ -44,3 +44,118 @@ jobs:
 
       - name: Build all applications
         run: pnpm build
+
+  deploy-aws:
+    name: Deploy to AWS
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-south-1
+      AWS_ACCOUNT_ID: "337513903682"
+      ECR_REPOSITORY: stockflow-api
+      STACK_NAME: stockflow-production
+      PRODUCT_IMAGE_BUCKET: stockflow-product-images-prod-hr211
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::337513903682:role/StockFlowGitHubDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sign in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and publish backend image
+        env:
+          IMAGE_URI: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          docker build --file apps/backend/Dockerfile.lambda --tag "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+
+      - name: Install application dependencies
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install packages and apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.AWS_DATABASE_URL }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter backend exec prisma migrate deploy
+
+      - name: Deploy AWS application stack
+        env:
+          DATABASE_URL: ${{ secrets.AWS_DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.AWS_JWT_SECRET }}
+        run: |
+          aws cloudformation deploy \
+            --stack-name "$STACK_NAME" \
+            --template-file infra/aws-app.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              BackendImageUri="$IMAGE_URI" \
+              DatabaseUrl="$DATABASE_URL" \
+              JwtSecret="$JWT_SECRET" \
+              ProductImageBucket="$PRODUCT_IMAGE_BUCKET"
+
+      - name: Read deployment outputs
+        run: |
+          API_URL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          FRONTEND_BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" --output text)
+          FRONTEND_DOMAIN=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='FrontendDomainName'].OutputValue" --output text)
+          echo "API_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "FRONTEND_BUCKET=$FRONTEND_BUCKET" >> "$GITHUB_ENV"
+          echo "DISTRIBUTION_ID=$DISTRIBUTION_ID" >> "$GITHUB_ENV"
+          echo "FRONTEND_DOMAIN=$FRONTEND_DOMAIN" >> "$GITHUB_ENV"
+
+      - name: Build and publish frontend
+        run: |
+          VITE_API_URL="$API_URL" pnpm --filter frontend build
+          aws s3 sync apps/frontend/dist "s3://$FRONTEND_BUCKET" --delete --exclude index.html --cache-control "public,max-age=31536000,immutable"
+          aws s3 cp apps/frontend/dist/index.html "s3://$FRONTEND_BUCKET/index.html" --cache-control "no-store" --content-type "text/html"
+
+      - name: Allow the AWS frontend to upload product images
+        run: |
+          cat > "$RUNNER_TEMP/product-image-cors.json" <<JSON
+          {
+            "CORSRules": [
+              {
+                "AllowedOrigins": [
+                  "https://$FRONTEND_DOMAIN",
+                  "https://stockflow-finance.vercel.app",
+                  "http://localhost:5173",
+                  "http://localhost:8080"
+                ],
+                "AllowedMethods": ["GET", "HEAD", "PUT"],
+                "AllowedHeaders": ["*"],
+                "ExposeHeaders": ["ETag"],
+                "MaxAgeSeconds": 3000
+              }
+            ]
+          }
+          JSON
+          aws s3api put-bucket-cors --bucket "$PRODUCT_IMAGE_BUCKET" --cors-configuration "file://$RUNNER_TEMP/product-image-cors.json"
+
+      - name: Refresh CloudFront and verify production
+        run: |
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*" >/dev/null
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors "$API_URL/health"
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors "https://$FRONTEND_DOMAIN/" >/dev/null

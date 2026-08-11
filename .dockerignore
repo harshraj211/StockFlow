@@ -1,0 +1,14 @@
+.git
+.github
+.vercel
+.design-qa
+node_modules
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+output
+tmp
+*.log
+*.tsbuildinfo
