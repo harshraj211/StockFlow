@@ -28,6 +28,29 @@
   text-rendering: optimizeLegibility;
 }
 
+.startup-error {
+  align-items: center;
+  background: var(--canvas);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 32px;
+  text-align: center;
+}
+
+.startup-error strong {
+  font-family: "Inter", Arial, sans-serif;
+  font-size: 24px;
+}
+
+.startup-error p {
+  color: var(--muted);
+  margin: 0;
+}
+
 :root[data-theme="dark"] {
   --canvas: #171717;
   --surface: #20201f;

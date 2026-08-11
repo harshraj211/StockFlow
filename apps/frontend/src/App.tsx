@@ -187,13 +187,33 @@ function can(user: User | null, roles: Role[]) {
   return !!user && roles.includes(user.role);
 }
 
+const validRoles: Role[] = ["ADMIN", "SALES", "WAREHOUSE", "ACCOUNTS"];
+
+function readStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem("user");
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as Partial<User>;
+    if (
+      typeof stored.id === "string" &&
+      typeof stored.name === "string" &&
+      typeof stored.email === "string" &&
+      validRoles.includes(stored.role as Role)
+    ) {
+      return stored as User;
+    }
+  } catch {
+    // Invalid browser state should return the user to the public overview.
+  }
+  localStorage.removeItem("user");
+  localStorage.removeItem("token");
+  return null;
+}
+
 export function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(() => {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
-  });
+  const [user, setUser] = useState<User | null>(readStoredUser);
   const [tab, setTab] = useState<Tab>("dashboard");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -307,12 +327,12 @@ export function App() {
         api.get("/dashboard/stats", { params: { period: dashboardPeriod } }),
         user?.role === "ADMIN" ? api.get("/users", { params: baseParams }) : Promise.resolve({ data: { items: [], total: 0 } })
       ]);
-      setCustomers(customerRes.data.items);
-      setProducts(productRes.data.items);
-      setChallans(challanRes.data.items);
-      setActivities(activityRes.data.items);
+      setCustomers(Array.isArray(customerRes.data.items) ? customerRes.data.items : []);
+      setProducts(Array.isArray(productRes.data.items) ? productRes.data.items : []);
+      setChallans(Array.isArray(challanRes.data.items) ? challanRes.data.items : []);
+      setActivities(Array.isArray(activityRes.data.items) ? activityRes.data.items : []);
       setDashboardStats(dashboardRes.data);
-      setTeamUsers(usersRes.data.items);
+      setTeamUsers(Array.isArray(usersRes.data.items) ? usersRes.data.items : []);
       setTotals({
         customers: customerRes.data.total,
         products: productRes.data.total,
