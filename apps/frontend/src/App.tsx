@@ -15,6 +15,8 @@ import {
   Lock,
   LogOut,
   Menu,
+  Monitor,
+  Moon,
   PackagePlus,
   Plus,
   RefreshCw,
@@ -24,6 +26,7 @@ import {
   Truck,
   Target,
   TrendingUp,
+  Sun,
   UserCog,
   UserRoundPlus,
   UsersRound,
@@ -35,6 +38,7 @@ import warehouseLoginImage from "./login-warehouse.png";
 
 type Tab = "dashboard" | "walkthrough" | "customers" | "products" | "challans" | "activity" | "users";
 type FieldErrors = Record<string, string>;
+type ThemePreference = "light" | "dark" | "system";
 const tabRoutes: Record<Tab, string> = {
   dashboard: "/",
   walkthrough: "/walkthrough",
@@ -211,6 +215,8 @@ export function App() {
   const [dataLoading, setDataLoading] = useState(false);
   const [sidebarCompact, setSidebarCompact] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemePreference>(() => (localStorage.getItem("theme") as ThemePreference | null) ?? "system");
   const [publicView, setPublicView] = useState<"overview" | "login">("overview");
   const [loginForm, setLoginForm] = useState({ email: "admin@fundsroom.test", password: "Password@123" });
   const [focusedCustomerId, setFocusedCustomerId] = useState<string | null>(null);
@@ -231,9 +237,31 @@ export function App() {
             : location.pathname.startsWith("/users")
               ? "users"
               : "dashboard";
-  const activeTab = user ? routeTab : tab;
+  const roleTabs: Record<Role, Tab[]> = {
+    ADMIN: ["dashboard", "walkthrough", "customers", "products", "challans", "activity", "users"],
+    SALES: ["dashboard", "customers", "challans"],
+    WAREHOUSE: ["dashboard", "products", "challans", "activity"],
+    ACCOUNTS: ["dashboard", "products", "challans", "activity"]
+  };
+  const activeTab = user ? (roleTabs[user.role].includes(routeTab) ? routeTab : "dashboard") : tab;
   const routeParts = location.pathname.split("/").filter(Boolean);
   const routeRecordId = routeParts[1] ?? null;
+
+  useEffect(() => {
+    if (user && !roleTabs[user.role].includes(routeTab)) navigate("/", { replace: true });
+  }, [user, routeTab]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      const resolved = theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      document.documentElement.dataset.theme = resolved;
+    };
+    applyTheme();
+    media.addEventListener("change", applyTheme);
+    localStorage.setItem("theme", theme);
+    return () => media.removeEventListener("change", applyTheme);
+  }, [theme]);
 
   function go(tabName: Tab, recordId?: string) {
     const base = tabRoutes[tabName];
@@ -554,20 +582,22 @@ export function App() {
           </div>
           <nav>
             <button className={activeTab === "dashboard" ? "active" : ""} onClick={() => go("dashboard")}><Boxes /> Dashboard</button>
-            <button className={activeTab === "walkthrough" ? "active" : ""} onClick={() => go("walkthrough")}><Sparkles /> Walkthrough</button>
-            <button className={activeTab === "customers" ? "active" : ""} onClick={() => go("customers")}><UsersRound /> Customers</button>
-            <button className={activeTab === "products" ? "active" : ""} onClick={() => go("products")}><PackagePlus /> Inventory</button>
-            <button className={activeTab === "challans" ? "active" : ""} onClick={() => go("challans")}><ClipboardList /> Challans</button>
-            <button className={activeTab === "activity" ? "active" : ""} onClick={() => go("activity")}><History /> Activity</button>
-            <button className={activeTab === "users" ? "active" : ""} disabled={user.role !== "ADMIN"} title={user.role !== "ADMIN" ? "Only Admin can manage team users" : "Manage team users"} onClick={() => go("users")}><UserCog /> Users</button>
+            {user.role === "ADMIN" && <button className={activeTab === "walkthrough" ? "active" : ""} onClick={() => go("walkthrough")}><Sparkles /> Walkthrough</button>}
+            {can(user, ["ADMIN", "SALES"]) && <button className={activeTab === "customers" ? "active" : ""} onClick={() => go("customers")}><UsersRound /> Customers</button>}
+            {can(user, ["ADMIN", "WAREHOUSE", "ACCOUNTS"]) && <button className={activeTab === "products" ? "active" : ""} onClick={() => go("products")}><PackagePlus /> Inventory</button>}
+            {can(user, ["ADMIN", "SALES", "WAREHOUSE", "ACCOUNTS"]) && <button className={activeTab === "challans" ? "active" : ""} onClick={() => go("challans")}><ClipboardList /> Challans</button>}
+            {can(user, ["ADMIN", "WAREHOUSE", "ACCOUNTS"]) && <button className={activeTab === "activity" ? "active" : ""} onClick={() => go("activity")}><History /> Activity</button>}
+            {user.role === "ADMIN" && <button className={activeTab === "users" ? "active" : ""} onClick={() => go("users")}><UserCog /> Users</button>}
           </nav>
         </div>
         <div className="sidebar-footer">
-          <div className="quick-actions">
-            <span>Quick Actions</span>
-            <button className="ghost" disabled={!can(user, ["ADMIN", "SALES"])} title={!can(user, ["ADMIN", "SALES"]) ? `${user.role} can review challans but cannot create them` : "Create a sales challan"} onClick={() => go("challans")}><Plus /> Create Challan</button>
-            <button className="ghost" disabled={!can(user, ["ADMIN", "WAREHOUSE"])} title={!can(user, ["ADMIN", "WAREHOUSE"]) ? `${user.role} can view inventory but cannot record stock movement` : "Record stock movement"} onClick={() => go("products")}><Warehouse /> Add Stock Movement</button>
-          </div>
+          {(can(user, ["ADMIN", "SALES"]) || can(user, ["ADMIN", "WAREHOUSE"])) && (
+            <div className="quick-actions">
+              <span>Quick Actions</span>
+              {can(user, ["ADMIN", "SALES"]) && <button className="ghost" onClick={() => go("challans")}><Plus /> Create Challan</button>}
+              {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="ghost" onClick={() => go("products")}><Warehouse /> Add Stock Movement</button>}
+            </div>
+          )}
           <div className="role-card">
             <Warehouse size={18} />
             <div>
@@ -590,6 +620,23 @@ export function App() {
           </label>
           <div>
             <span className="date-chip"><CalendarDays size={16} /> Aug 10, 2026</span>
+          </div>
+          <div className="theme-wrap">
+            <button className="icon-button" aria-label="Change appearance" aria-expanded={themeOpen} onClick={() => setThemeOpen((value) => !value)}>
+              {theme === "dark" ? <Moon size={18} /> : theme === "light" ? <Sun size={18} /> : <Monitor size={18} />}
+            </button>
+            {themeOpen && (
+              <div className="theme-menu">
+                <strong>Appearance</strong>
+                {([
+                  ["light", "Light", Sun],
+                  ["dark", "Dark", Moon],
+                  ["system", "System", Monitor]
+                ] as const).map(([value, label, Icon]) => (
+                  <button className={theme === value ? "selected" : ""} key={value} onClick={() => { setTheme(value); setThemeOpen(false); }}><Icon size={16} /> {label}</button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="notification-wrap">
             <button className={`icon-button ${notifications.length ? "alert-dot" : ""}`} aria-label="Notifications" onClick={() => setNotificationsOpen((value) => !value)}><Bell /></button>
@@ -750,28 +797,14 @@ function Metric({ label, value, hint }: { label: string; value: number | string;
 }
 
 function PermissionNotice({ text }: { text: string }) {
-  return (
-    <div className="panel permission">
-      <strong>Read-only access</strong>
-      <span>{text}</span>
-    </div>
-  );
+  void text;
+  return null;
 }
 
 function PermissionActionPanel({ text, actions }: { text: string; actions: string[] }) {
-  return (
-    <div className="panel permission">
-      <strong><Lock size={16} /> Role-limited actions</strong>
-      <span>{text}</span>
-      <div className="disabled-action-list">
-        {actions.map((action) => (
-          <button className="secondary locked" disabled title={text} key={action}>
-            <Lock size={14} /> {action}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+  void text;
+  void actions;
+  return null;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
@@ -2018,12 +2051,7 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
                     <button disabled={statusUpdatingId === challan.id} onClick={(event) => { event.stopPropagation(); updateStatus(challan.id, "CONFIRMED"); }}>{statusUpdatingId === challan.id ? "Updating..." : "Confirm"}</button>
                     <button className="secondary" disabled={statusUpdatingId === challan.id} onClick={(event) => { event.stopPropagation(); updateStatus(challan.id, "CANCELLED"); }}>{statusUpdatingId === challan.id ? "Updating..." : "Cancel"}</button>
                   </>
-                ) : (
-                  <>
-                    <button disabled title={`${user.role} can view challans but cannot confirm them`}><Lock size={14} /> Confirm</button>
-                    <button className="secondary locked" disabled title={`${user.role} can view challans but cannot cancel them`}><Lock size={14} /> Cancel</button>
-                  </>
-                )}
+                ) : null}
               </div>
             )}
           </article>
