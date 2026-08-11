@@ -118,19 +118,7 @@ jobs:
       - name: Read deployment outputs
         run: |
           API_URL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
-          FRONTEND_BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
-          DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" --output text)
-          FRONTEND_DOMAIN=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='FrontendDomainName'].OutputValue" --output text)
           echo "API_URL=$API_URL" >> "$GITHUB_ENV"
-          echo "FRONTEND_BUCKET=$FRONTEND_BUCKET" >> "$GITHUB_ENV"
-          echo "DISTRIBUTION_ID=$DISTRIBUTION_ID" >> "$GITHUB_ENV"
-          echo "FRONTEND_DOMAIN=$FRONTEND_DOMAIN" >> "$GITHUB_ENV"
-
-      - name: Build and publish frontend
-        run: |
-          VITE_API_URL="$API_URL" pnpm --filter frontend build
-          aws s3 sync apps/frontend/dist "s3://$FRONTEND_BUCKET" --delete --exclude index.html --cache-control "public,max-age=31536000,immutable"
-          aws s3 cp apps/frontend/dist/index.html "s3://$FRONTEND_BUCKET/index.html" --cache-control "no-store" --content-type "text/html"
 
       - name: Allow the AWS frontend to upload product images
         run: |
@@ -139,7 +127,7 @@ jobs:
             "CORSRules": [
               {
                 "AllowedOrigins": [
-                  "https://$FRONTEND_DOMAIN",
+                  "$API_URL",
                   "https://stockflow-finance.vercel.app",
                   "http://localhost:5173",
                   "http://localhost:8080"
@@ -154,8 +142,7 @@ jobs:
           JSON
           aws s3api put-bucket-cors --bucket "$PRODUCT_IMAGE_BUCKET" --cors-configuration "file://$RUNNER_TEMP/product-image-cors.json"
 
-      - name: Refresh CloudFront and verify production
+      - name: Verify AWS production
         run: |
-          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*" >/dev/null
           curl --fail --retry 12 --retry-delay 10 --retry-all-errors "$API_URL/health"
-          curl --fail --retry 12 --retry-delay 10 --retry-all-errors "https://$FRONTEND_DOMAIN/" >/dev/null
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors "$API_URL/" >/dev/null

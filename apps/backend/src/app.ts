@@ -1,4 +1,6 @@
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -20,7 +22,20 @@ export const app = express();
 
 // Render forwards requests through one reverse proxy.
 app.set("trust proxy", 1);
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "https://*.amazonaws.com"],
+        connectSrc: ["'self'", "https://*.amazonaws.com"]
+      }
+    }
+  })
+);
 app.use(
   cors({
     origin(origin, callback) {
@@ -92,4 +107,17 @@ app.use("/challans", challanRouter);
 app.use("/users", usersRouter);
 app.use("/dashboard", dashboardRouter);
 app.use("/activity", activityRouter);
+
+if (config.serveFrontend) {
+  const frontendDirectory = fileURLToPath(new URL("../../frontend/dist", import.meta.url));
+  const apiPrefixes = ["/auth", "/customers", "/products", "/challans", "/users", "/dashboard", "/activity"];
+  app.use(express.static(frontendDirectory, { index: false }));
+  app.use((req, res, next) => {
+    if (req.method === "GET" && !apiPrefixes.some((prefix) => req.path.startsWith(prefix))) {
+      return res.sendFile(path.join(frontendDirectory, "index.html"));
+    }
+    return next();
+  });
+}
+
 app.use(errorHandler);

@@ -20,6 +20,7 @@ export const config = {
     .split(",")
     .map((url) => url.trim())
     .filter(Boolean),
+  serveFrontend: process.env.SERVE_FRONTEND === "true",
   awsRegion: process.env.AWS_REGION,
   awsS3Bucket: process.env.AWS_S3_BUCKET,
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID,

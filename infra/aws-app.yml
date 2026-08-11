@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: StockFlow serverless API and private CloudFront frontend.
+Description: StockFlow React frontend and Express API on API Gateway and Lambda.
 
 Parameters:
   BackendImageUri:
@@ -15,86 +15,6 @@ Parameters:
     Default: stockflow-product-images-prod-hr211
 
 Resources:
-  FrontendBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub stockflow-web-${AWS::AccountId}-${AWS::Region}
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Application
-          Value: StockFlow
-
-  FrontendOriginAccessControl:
-    Type: AWS::CloudFront::OriginAccessControl
-    Properties:
-      OriginAccessControlConfig:
-        Name: stockflow-frontend-oac
-        Description: Signed CloudFront access to the private StockFlow frontend bucket
-        OriginAccessControlOriginType: s3
-        SigningBehavior: always
-        SigningProtocol: sigv4
-
-  FrontendDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Comment: StockFlow production frontend
-        Enabled: true
-        HttpVersion: http2and3
-        DefaultRootObject: index.html
-        PriceClass: PriceClass_200
-        Origins:
-          - Id: stockflow-private-s3
-            DomainName: !GetAtt FrontendBucket.RegionalDomainName
-            OriginAccessControlId: !Ref FrontendOriginAccessControl
-            S3OriginConfig: {}
-        DefaultCacheBehavior:
-          TargetOriginId: stockflow-private-s3
-          ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods: [GET, HEAD, OPTIONS]
-          CachedMethods: [GET, HEAD, OPTIONS]
-          Compress: true
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-        CustomErrorResponses:
-          - ErrorCode: 403
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-            ErrorCachingMinTTL: 0
-          - ErrorCode: 404
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-            ErrorCachingMinTTL: 0
-      Tags:
-        - Key: Application
-          Value: StockFlow
-
-  FrontendBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref FrontendBucket
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: AllowCloudFrontRead
-            Effect: Allow
-            Principal:
-              Service: cloudfront.amazonaws.com
-            Action: s3:GetObject
-            Resource: !Sub ${FrontendBucket.Arn}/*
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
-
   BackendRole:
     Type: AWS::IAM::Role
     Properties:
@@ -137,7 +57,8 @@ Resources:
           DATABASE_URL: !Ref DatabaseUrl
           JWT_SECRET: !Ref JwtSecret
           JWT_EXPIRES_IN: 8h
-          FRONTEND_URL: !Sub https://${FrontendDistribution.DomainName},https://stockflow-finance.vercel.app
+          FRONTEND_URL: https://stockflow-finance.vercel.app
+          SERVE_FRONTEND: "true"
           AWS_S3_BUCKET: !Ref ProductImageBucket
       Tags:
         - Key: Application
@@ -159,7 +80,6 @@ Resources:
         AllowHeaders: [Authorization, Content-Type]
         AllowMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
         AllowOrigins:
-          - !Sub https://${FrontendDistribution.DomainName}
           - https://stockflow-finance.vercel.app
         MaxAge: 600
 
@@ -198,10 +118,4 @@ Outputs:
   ApiUrl:
     Value: !GetAtt BackendApi.ApiEndpoint
   FrontendUrl:
-    Value: !Sub https://${FrontendDistribution.DomainName}
-  FrontendBucketName:
-    Value: !Ref FrontendBucket
-  FrontendDistributionId:
-    Value: !Ref FrontendDistribution
-  FrontendDomainName:
-    Value: !GetAtt FrontendDistribution.DomainName
+    Value: !GetAtt BackendApi.ApiEndpoint
