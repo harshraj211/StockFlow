@@ -12,7 +12,7 @@
 - Desktop viewport and CSS size: 1440 x 1024 at device scale 1.
 - Mobile viewport and CSS size: 390 x 844 at device scale 1.
 - Source and implementation captures were normalized to 1440 x 1024 for side-by-side review.
-- State: Admin overview with populated offline demo data; light and dark themes. Sales mobile overview and Warehouse role visibility were also checked.
+- State: Admin overview with populated offline demo data; light and dark themes. Sales mobile overview, Warehouse role visibility, and the populated Admin Activity page were also checked.
 
 ## Full-View Comparison
 
@@ -40,6 +40,8 @@ Focused crops were not required because both source and implementation are nativ
 - Dashboard New challan opens the creation form directly; cancel returns to `/challans`.
 - Mobile navigation opens correctly, hides unavailable Sales modules, and the page has no viewport-level horizontal overflow.
 - The mobile exception ledger reflows into readable action rows.
+- Activity rows use the available content width on desktop, keep actor metadata aligned, and stack into a single readable column on mobile.
+- Activity mobile check at 390 x 844: 0 px viewport overflow; titles, details, actor, and timestamp remain visible.
 - Browser console check: no errors or warnings.
 - Production frontend build: passed.
 
@@ -49,7 +51,9 @@ Focused crops were not required because both source and implementation are nativ
 2. Fixes: removed raw network failure chrome when demo fallback succeeds, moved create forms behind explicit actions, and made summary metrics and exception rows role-aware.
 3. Responsive pass found a P2 horizontal ledger presentation issue on 390 px mobile.
 4. Fix: reflowed exception rows into a mobile two-column action layout and hid internal scrollbars while preserving semantic table markup.
-5. Final desktop and mobile captures show no remaining P0, P1, or P2 findings.
+5. Activity pass found a P1 grid mismatch: markup rendered two children into a three-column row, forcing the activity content into a 36 px icon track.
+6. Fix: changed Activity to an explicit content-and-metadata grid with a single-column mobile layout.
+7. Final desktop and mobile captures show no remaining P0, P1, or P2 findings.
 
 ## Follow-Up Polish
 
