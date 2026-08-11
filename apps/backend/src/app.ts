@@ -36,15 +36,16 @@ app.use(
     }
   })
 );
-app.use(
-  cors({
+app.use((req, res, next) => {
+  const requestOrigin = `${req.protocol}://${req.get("host")}`;
+  return cors({
     origin(origin, callback) {
-      if (!origin || config.frontendUrls.includes(origin)) return callback(null, true);
+      if (!origin || origin === requestOrigin || config.frontendUrls.includes(origin)) return callback(null, true);
       return callback(new Error("Origin is not allowed by CORS"));
     },
     credentials: true
-  })
-);
+  })(req, res, next);
+});
 app.use(express.json());
 app.use(
   morgan((tokens, req, res) =>

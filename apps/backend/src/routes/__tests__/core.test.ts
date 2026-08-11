@@ -56,6 +56,14 @@ describe("core API behavior", () => {
     vi.clearAllMocks();
   });
 
+  it("allows browser requests from the API's own origin", async () => {
+    const origin = "http://stockflow.test";
+    const res = await request(app).get("/health").set("Host", "stockflow.test").set("Origin", origin);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["access-control-allow-origin"]).toBe(origin);
+  });
+
   it("logs in with valid credentials", async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: "user-1",
