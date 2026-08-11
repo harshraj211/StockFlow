@@ -15,12 +15,15 @@ const prismaMock = {
     findUnique: vi.fn()
   },
   salesChallan: {
-    count: vi.fn()
+    count: vi.fn(),
+    findFirst: vi.fn()
   },
   customer: {
     count: vi.fn(),
-    findMany: vi.fn()
+    findMany: vi.fn(),
+    findUnique: vi.fn()
   },
+  followUpNote: { create: vi.fn() },
   $queryRaw: vi.fn(),
   $transaction: vi.fn()
 };
@@ -75,6 +78,14 @@ describe("core API behavior", () => {
       name: "Cable",
       currentStock: 3
     });
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback({
+        product: {
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          findUnique: vi.fn().mockResolvedValue({ currentStock: 3 })
+        }
+      })
+    );
 
     const res = await request(app)
       .post("/products/product-1/movements")
@@ -85,8 +96,52 @@ describe("core API behavior", () => {
     expect(res.body.message).toContain("Insufficient stock");
   });
 
+  it("creates a validated follow-up note for a customer", async () => {
+    prismaMock.customer.findUnique.mockResolvedValue({ id: "customer-1" });
+    prismaMock.followUpNote.create.mockResolvedValue({
+      id: "note-1",
+      customerId: "customer-1",
+      note: "Called to confirm delivery window.",
+      createdById: "user-1"
+    });
+
+    const res = await request(app)
+      .post("/customers/customer-1/follow-ups")
+      .set("Authorization", `Bearer ${token("SALES")}`)
+      .send({ note: "Called to confirm delivery window." });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.followUpNote.create).toHaveBeenCalledWith({
+      data: {
+        customerId: "customer-1",
+        note: "Called to confirm delivery window.",
+        createdById: "user-1"
+      }
+    });
+  });
+
+  it("rejects markup in follow-up notes", async () => {
+    const res = await request(app)
+      .post("/customers/customer-1/follow-ups")
+      .set("Authorization", `Bearer ${token("SALES")}`)
+      .send({ note: "<img src=x onerror=alert(1)>" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Validation failed");
+  });
+
+  it("enforces strong passwords for new user accounts", async () => {
+    const res = await request(app)
+      .post("/users")
+      .set("Authorization", `Bearer ${token("ADMIN")}`)
+      .send({ name: "New User", email: "new@test.local", password: "password123", role: "SALES" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors.some((error: { message: string }) => error.message.includes("uppercase"))).toBe(true);
+  });
+
   it("confirming a challan reduces stock and writes stock movement", async () => {
-    const productUpdate = vi.fn();
+    const productUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     const movementCreate = vi.fn();
     const historyCreate = vi.fn();
     const challanUpdate = vi.fn().mockResolvedValue({ id: "challan-1", status: "CONFIRMED" });
@@ -105,7 +160,7 @@ describe("core API behavior", () => {
         },
         product: {
           findUnique: vi.fn().mockResolvedValue({ id: "product-1", name: "Cable", currentStock: 10 }),
-          update: productUpdate
+          updateMany: productUpdateMany
         },
         stockMovement: {
           create: movementCreate
@@ -122,8 +177,8 @@ describe("core API behavior", () => {
       .send({ status: "CONFIRMED" });
 
     expect(res.status).toBe(200);
-    expect(productUpdate).toHaveBeenCalledWith({
-      where: { id: "product-1" },
+    expect(productUpdateMany).toHaveBeenCalledWith({
+      where: { id: "product-1", currentStock: { gte: 2 } },
       data: { currentStock: { decrement: 2 } }
     });
     expect(movementCreate).toHaveBeenCalled();
