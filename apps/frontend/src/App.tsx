@@ -3,9 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
+  BarChart3,
   Bell,
   Boxes,
   CalendarDays,
+  CheckCircle2,
   CircleDollarSign,
   ClipboardList,
   History,
@@ -19,6 +21,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Truck,
   Target,
   TrendingUp,
   UserCog,
@@ -207,6 +210,7 @@ export function App() {
   const [dataLoading, setDataLoading] = useState(false);
   const [sidebarCompact, setSidebarCompact] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [publicView, setPublicView] = useState<"overview" | "login">("overview");
   const [loginForm, setLoginForm] = useState({ email: "admin@fundsroom.test", password: "Password@123" });
   const [focusedCustomerId, setFocusedCustomerId] = useState<string | null>(null);
   const [focusedProductId, setFocusedProductId] = useState<string | null>(null);
@@ -366,13 +370,82 @@ export function App() {
   }
 
   if (!user) {
+    if (publicView === "overview") {
+      return (
+        <main className="marketing-shell">
+          <header className="marketing-nav">
+            <button className="marketing-brand" onClick={() => setPublicView("overview")} aria-label="StockFlow home">
+              <span className="brand-mark"><Boxes size={22} /></span>
+              <span>StockFlow</span>
+            </button>
+            <nav aria-label="Main navigation">
+              <a href="#workflows">Workflows</a>
+              <a href="#control">Control center</a>
+            </nav>
+            <div className="marketing-actions">
+              <button className="quiet-button" onClick={() => setPublicView("login")}>Sign in</button>
+              <button onClick={() => { setPublicView("login"); setMessage("New team accounts are provisioned by an administrator."); }}>Request access <ArrowRight size={16} /></button>
+            </div>
+          </header>
+
+          <section className="marketing-hero">
+            <div className="hero-copy">
+              <p className="eyebrow">Operations intelligence for growing teams</p>
+              <h1>Know what is in stock. Keep every order moving.</h1>
+              <p className="hero-summary">StockFlow gives sales, warehouse, and accounts teams one dependable place for inventory, customer follow-ups, and challan approvals.</p>
+              <div className="hero-actions">
+                <button onClick={() => setPublicView("login")}>Open StockFlow <ArrowRight size={17} /></button>
+                <a className="text-link" href="#workflows">Explore workflows</a>
+              </div>
+              <div className="hero-proof">
+                <span><CheckCircle2 size={16} /> Role-based access</span>
+                <span><CheckCircle2 size={16} /> Transaction-safe stock</span>
+                <span><CheckCircle2 size={16} /> Full audit history</span>
+              </div>
+            </div>
+
+            <div className="product-preview" aria-label="StockFlow dashboard preview">
+              <div className="preview-topbar">
+                <div className="preview-brand"><Boxes size={18} /> StockFlow</div>
+                <span className="preview-user">ADMIN</span>
+              </div>
+              <div className="preview-body">
+                <aside className="preview-sidebar"><span className="preview-active">Overview</span><span>Customers</span><span>Inventory</span><span>Challans</span></aside>
+                <div className="preview-content">
+                  <div className="preview-heading"><div><strong>Operations overview</strong><small>Today, 10:30 AM</small></div><span className="live-dot">Live</span></div>
+                  <div className="preview-metrics"><PreviewMetric label="Low stock" value="6" tone="danger" /><PreviewMetric label="Follow-ups" value="2" tone="warning" /><PreviewMetric label="Draft challans" value="2" tone="info" /></div>
+                  <div className="preview-table"><strong>Attention required</strong><div><span>LED Tube Light 4ft</span><b>5 units</b></div><div><span>Sharma Distributors</span><b>Follow up</b></div><div><span>CH-2026-00002</span><b>Draft</b></div></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="workflow-section" id="workflows">
+            <div className="section-intro"><p className="eyebrow">Built for the work between order and dispatch</p><h2>One operational picture, across every handoff.</h2></div>
+            <div className="workflow-grid">
+              <article><span className="workflow-icon teal"><UsersRound size={21} /></span><h3>Customer follow-through</h3><p>Capture customer context, schedule the next touchpoint, and keep hot leads from going quiet.</p><span className="workflow-link">CRM and follow-ups <ArrowRight size={15} /></span></article>
+              <article><span className="workflow-icon orange"><Boxes size={21} /></span><h3>Inventory with context</h3><p>See availability by SKU and location, record movement reasons, and act before a stockout.</p><span className="workflow-link">Stock control <ArrowRight size={15} /></span></article>
+              <article><span className="workflow-icon blue"><Truck size={21} /></span><h3>Confident challan approval</h3><p>Confirm only when stock is available, deduct it once, and retain a clear approval trail.</p><span className="workflow-link">Sales challans <ArrowRight size={15} /></span></article>
+            </div>
+          </section>
+
+          <section className="control-section" id="control">
+            <div><p className="eyebrow">A system that explains itself</p><h2>Control without losing speed.</h2><p>Every important action has a clear owner, status, and history. Your team can move quickly without creating spreadsheet chaos later.</p></div>
+            <div className="control-points"><span><ShieldCheck size={20} /> Role-aware permissions</span><span><History size={20} /> Auditable status changes</span><span><BarChart3 size={20} /> Clear operational metrics</span></div>
+          </section>
+
+          <footer className="marketing-footer"><span><Boxes size={17} /> StockFlow</span><button className="quiet-button" onClick={() => setPublicView("login")}>Sign in <ArrowRight size={15} /></button></footer>
+        </main>
+      );
+    }
     return (
       <main className="login-screen">
         <section className="login-panel">
           <div>
-            <p className="eyebrow">StockFlow</p>
-            <h1>Operations Portal</h1>
-            <p className="muted">Sign in with your team credentials or use a demo role shortcut.</p>
+            <button className="back-link" onClick={() => { setPublicView("overview"); setMessage(""); }}><ArrowRight size={15} /> Back to overview</button>
+            <p className="eyebrow">StockFlow workspace</p>
+            <h1>Welcome back</h1>
+            <p className="muted">Sign in to manage customers, inventory, and challan approvals.</p>
           </div>
           <form className="login-form" onSubmit={submitLogin}>
             <label>
@@ -583,6 +656,10 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function PreviewMetric({ label, value, tone }: { label: string; value: string; tone: "danger" | "warning" | "info" }) {
+  return <div className={`preview-metric ${tone}`}><small>{label}</small><strong>{value}</strong></div>;
 }
 
 function formatMoney(value: string | number | undefined) {
