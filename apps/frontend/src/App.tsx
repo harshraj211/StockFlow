@@ -912,44 +912,13 @@ function DashboardView({ stats, customers, products, allProducts, lowStock, draf
     : [];
   const topCustomers = Array.from(
     recentChallans.reduce((map, challan) => {
-      const current = map.get(challan.customer.id) ?? {
-        id: challan.customer.id,
-        businessName: challan.customer.businessName,
-        challans: 0,
-        amount: 0
-      };
+      const current = map.get(challan.customer.id) ?? { id: challan.customer.id, businessName: challan.customer.businessName, challans: 0, amount: 0 };
       current.challans += 1;
       current.amount += Number(challan.totalAmount ?? 0);
       map.set(challan.customer.id, current);
       return map;
     }, new Map<string, { id: string; businessName: string; challans: number; amount: number }>())
-  )
-    .map(([, value]) => value)
-    .sort((left, right) => right.amount - left.amount)
-    .slice(0, 3);
-  const actionCards = [
-    {
-      title: "Low stock recovery",
-      body: `${productStats.lowStock} SKUs are below reorder level and ${productStats.outOfStock} are already unavailable.`,
-      cta: "Review inventory",
-      icon: AlertTriangle,
-      action: onReviewLowStock
-    },
-    {
-      title: "Follow-up queue",
-      body: `${upcomingFollowUps.length} customers need contact this week, including hot and warm leads.`,
-      cta: "Open CRM queue",
-      icon: CalendarDays,
-      action: onReviewFollowUps
-    },
-    {
-      title: "Pending confirmations",
-      body: `${challanStats.draft} challans are still in draft and waiting for stock confirmation.`,
-      cta: "Review challans",
-      icon: ClipboardList,
-      action: onReviewDraftChallans
-    }
-  ];
+  ).map(([, value]) => value).sort((left, right) => right.amount - left.amount).slice(0, 3);
 
   return (
     <section className="ops-layout">
@@ -985,31 +954,11 @@ function DashboardView({ stats, customers, products, allProducts, lowStock, draf
             </select>
           </div>
           <div className="grid stats">
-            <Metric label="Confirmed Revenue" value={formatMoney(stats?.revenue.confirmedTotal)} hint={period === "today" ? "Today" : period === "week" ? "This week" : "This month"} />
-            <Metric label="Customers" value={customerStats.total} hint={`${customerStats.active} active / ${customerStats.leads} leads`} />
-            <Metric label="Challans Confirmed" value={challanStats.confirmed} hint="Stock updated" />
-            <Metric label="Healthy Stock" value={productStats.healthyStock} hint="Above minimum" />
-            <Metric label="Low Stock Items" value={productStats.lowStock} hint="Below reorder level" />
-            <Metric label="Out of Stock" value={productStats.outOfStock} hint="Immediate action" />
+            <Metric label="Confirmed revenue" value={formatMoney(stats?.revenue.confirmedTotal)} hint={period === "today" ? "Today" : period === "week" ? "This week" : "This month"} />
+            <Metric label="Active customers" value={customerStats.active} hint={`${customerStats.leads} leads in progress`} />
+            <Metric label="Confirmed challans" value={challanStats.confirmed} hint="Stock has been updated" />
+            <Metric label="Inventory health" value={`${productStats.healthyStock}/${productStats.total}`} hint={`${productStats.lowStock} items need review`} />
           </div>
-        </section>
-
-        <section className="dashboard-grid dashboard-actions">
-          {actionCards.map((card) => {
-            const Icon = card.icon;
-            return (
-              <button className="action-card" key={card.title} onClick={card.action}>
-                <div className="action-card-icon">
-                  <Icon size={18} />
-                </div>
-                <div>
-                  <strong>{card.title}</strong>
-                  <p>{card.body}</p>
-                </div>
-                <span>{card.cta} <ArrowRight size={14} /></span>
-              </button>
-            );
-          })}
         </section>
 
         <section className="dashboard-grid">
