@@ -633,6 +633,16 @@ function hasErrors(errors: FieldErrors) {
   return Object.values(errors).some(Boolean);
 }
 
+function escapeHtml(value: string | number | null | undefined) {
+  return String(value ?? "").replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#039;",
+    '"': "&quot;"
+  })[character] ?? character);
+}
+
 function FieldError({ message }: { message?: string }) {
   return message ? <small className="field-error">{message}</small> : null;
 }
@@ -1807,9 +1817,9 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
     const rows = challan.items.map((item, index) => `
       <tr>
         <td>${index + 1}</td>
-        <td>${item.productName}<br><small>${item.sku} - ${item.category}</small></td>
-        <td>${item.location}</td>
-        <td>${item.quantity}</td>
+        <td>${escapeHtml(item.productName)}<br><small>${escapeHtml(item.sku)} - ${escapeHtml(item.category)}</small></td>
+        <td>${escapeHtml(item.location)}</td>
+        <td>${escapeHtml(item.quantity)}</td>
         <td>${formatMoney(item.unitPrice)}</td>
         <td>${formatMoney(Number(item.unitPrice) * item.quantity)}</td>
       </tr>
@@ -1817,7 +1827,7 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
     const html = `
       <html>
         <head>
-          <title>${challan.challanNumber}</title>
+          <title>${escapeHtml(challan.challanNumber)}</title>
           <style>
             * { box-sizing: border-box; }
             body { font-family: Arial, sans-serif; color: #172033; padding: 32px; }
@@ -1847,15 +1857,15 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
             </div>
             <div class="doc-title">
               <h1>Sales Challan</h1>
-              <p>${challan.challanNumber}</p>
-              <span class="status">${challan.status}</span>
+              <p>${escapeHtml(challan.challanNumber)}</p>
+              <span class="status">${escapeHtml(challan.status)}</span>
             </div>
           </div>
           <div class="meta">
-            <div class="box"><strong>Bill To</strong><br>${challan.customer.businessName}<br>${challan.customer.name}<br>${challan.customer.mobile}</div>
-            <div class="box"><strong>Document Info</strong><br>Created: ${new Date(challan.createdAt).toLocaleString()}<br>Created by: ${challan.createdBy?.name ?? "System"}<br>Total Qty: ${challan.totalQuantity}</div>
+            <div class="box"><strong>Bill To</strong><br>${escapeHtml(challan.customer.businessName)}<br>${escapeHtml(challan.customer.name)}<br>${escapeHtml(challan.customer.mobile)}</div>
+            <div class="box"><strong>Document Info</strong><br>Created: ${escapeHtml(new Date(challan.createdAt).toLocaleString())}<br>Created by: ${escapeHtml(challan.createdBy?.name ?? "System")}<br>Total Qty: ${escapeHtml(challan.totalQuantity)}</div>
           </div>
-          ${challan.notes ? `<div class="notes"><strong>Notes:</strong> ${challan.notes}</div>` : ""}
+          ${challan.notes ? `<div class="notes"><strong>Notes:</strong> ${escapeHtml(challan.notes)}</div>` : ""}
           <table>
             <thead><tr><th>#</th><th>Product</th><th>Location</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
             <tbody>${rows}</tbody>
