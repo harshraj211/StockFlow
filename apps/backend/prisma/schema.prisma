@@ -108,6 +108,7 @@ model Product {
   currentStock    Int
   minimumStock    Int
   location        String
+  imageKey        String?
   movements       StockMovement[]
   challanItems    SalesChallanItem[]
   createdAt       DateTime        @default(now())

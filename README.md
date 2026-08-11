@@ -54,6 +54,7 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 5. **Professional Document Output** — challan print view includes branding, customer details, item table, totals, notes, and a signature area.
 6. **Role Demonstration** — Admin, Sales, Warehouse, and Accounts accounts show different permission boundaries clearly in both the UI and the API.
 7. **Reviewer-Ready Experience** — a public product overview, focused login flow, responsive operations workspace, and Light/Dark/System themes make every workflow easy to inspect.
+8. **Private Product Media** — product images upload directly to a private AWS S3 bucket through five-minute presigned URLs; the API verifies type and size before attaching them.
 
 ---
 
@@ -62,7 +63,7 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 - **Backend**: Node.js, TypeScript, Express.js, Prisma ORM, PostgreSQL, JWT, Zod, Helmet, Express Rate Limit
 - **Frontend**: React 19, TypeScript, Vite, CSS (Vanilla Design System)
 - **DevOps**: Docker Compose (local PostgreSQL), GitHub Actions CI, environment-based configuration
-- **Hosting**: Vercel (frontend), Render (API), Supabase (PostgreSQL)
+- **Hosting**: Vercel (frontend), Render (API), Supabase (PostgreSQL), AWS S3 (private product images)
 
 ---
 
@@ -75,7 +76,7 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 - **Swagger/OpenAPI Docs**: `GET /docs` serves interactive API documentation; `GET /openapi.json` exposes the raw contract.
 - **Executive Dashboard KPIs**: `GET /dashboard/stats` returns revenue, active/lead breakdowns, low-stock items, upcoming follow-ups, and recent challans.
 - **Customer CRM Module**: create/read/update workflows, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
-- **Product & Inventory Module**: SKU uniqueness enforcement, category/location tracking, stock-level warnings, and a full IN/OUT stock movement audit log with reason and user attribution.
+- **Product & Inventory Module**: SKU uniqueness enforcement, category/location tracking, stock-level warnings, private AWS S3 product images, and a full IN/OUT stock movement audit log with reason and user attribution.
 - **Sales Challan Engine**: multi-product draft/confirmed creation, retry-safe sequential numbers (`CH-2026-00001`), snapshotting of product details, total amount computation, and atomic guarded stock decrements that never let stock go negative.
 - **Challan Status History**: every lifecycle event stored with from/to status, note, actor, role, and timestamp for full auditability.
 - **Admin User Management**: list, register, adjust roles, activate/deactivate accounts.
@@ -181,6 +182,9 @@ Business endpoints require `Authorization: Bearer <token>`. `/auth/login`, `/hea
 - `PUT  /products/:id` — edit (`ADMIN`, `WAREHOUSE`)
 - `GET  /products/:id/movements` — paginated stock movement audit trail
 - `POST /products/:id/movements` — manual IN/OUT adjustment (`ADMIN`, `WAREHOUSE`)
+- `POST /products/:id/image/upload-url` — create a five-minute direct-to-S3 upload URL (`ADMIN`, `WAREHOUSE`)
+- `POST /products/:id/image/complete` — verify and attach an uploaded image (`ADMIN`, `WAREHOUSE`)
+- `DELETE /products/:id/image` — remove the private S3 object (`ADMIN`, `WAREHOUSE`)
 
 ### Sales Challans
 - `GET   /challans` — list (supports `page`, `limit`, `search`)
@@ -226,7 +230,7 @@ Full diagrams and reasoning live in [`ARCHITECTURE.md`](./ARCHITECTURE.md), cove
 - Walkthrough — reviewer-ready demo guide, credentials, module shortcuts, business-rule highlights
 - Dashboard — revenue KPIs, low-stock alerts, upcoming follow-ups, notification actions, recent challans
 - Customers — add/edit, Hot/Warm/Cold priority, follow-up filters, detail view, notes
-- Products — add/edit, status badges, category/location/low-stock filters, reorder suggestion, manual stock movement, audit history
+- Products — add/edit, private S3 image upload, status badges, category/location/low-stock filters, reorder suggestion, manual stock movement, audit history
 - Challans — draft/confirmed creation, detail view, lifecycle timeline, notes, confirm/cancel, print, PDF export
 - Activity — global audit stream across CRM, inventory, challans, admin actions
 - Deep Links — real URLs for records (`/customers/:id`, `/products/:id`, `/challans/:id`) with browser history support
@@ -253,7 +257,7 @@ Being upfront about scope boundaries and tradeoffs made under the assignment's t
 - **Confirmed challans cannot be cancelled or edited**, only Draft ones. Reversing a confirmed challan (e.g. a customer return) would need a separate credit/return flow, which is out of scope here — this is a deliberate assumption, not an oversight, and is documented in [Key Assumptions](#key-assumptions--business-logic) below.
 - **No multi-warehouse stock allocation.** `location` is stored per product as a single field; the schema doesn't yet support splitting one SKU's stock across multiple warehouses with independent reorder thresholds.
 - **No refresh-token flow.** Auth issues a single JWT on login with a fixed expiry; there's no silent-refresh or long-lived session handling, which a production system would want.
-- **No file/image upload.** Product photos and document attachments (e.g. scanned PO) aren't supported — S3 upload was considered but deprioritized in favor of correctness-critical backend work.
+- **No document attachments.** Product photos are supported through private S3 storage, but scanned purchase orders and other general attachments remain out of scope.
 - **Frontend is a single-file React app (`App.tsx`).** It works and is fully functional, but isn't split into `pages/`/`components/` the way a larger production codebase would be — a conscious tradeoff to prioritize backend business logic within the time available.
 
 ---
@@ -273,14 +277,15 @@ Being upfront about scope boundaries and tradeoffs made under the assignment's t
 - **Backend**: [StockFlow API on Render](https://stockflow-api-x7w3.onrender.com/health)
 - **API Documentation**: [Swagger UI](https://stockflow-api-x7w3.onrender.com/docs)
 - **Database**: Supabase managed PostgreSQL
+- **Product Media**: private AWS S3 bucket with Block Public Access and short-lived presigned URLs
 - **Continuous Integration**: [GitHub Actions quality checks](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml)
 
 The Render free instance may need a short cold start after a period of inactivity. The frontend remains available while the API wakes up.
 
 Deployment configuration:
 1. Provision a Postgres instance (Neon/Supabase/Render).
-2. Deploy `apps/backend` with env vars `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `FRONTEND_URL`, `PORT`.
-3. Run `pnpm --filter backend exec prisma migrate deploy` against the production database.
+2. Deploy `apps/backend` with env vars `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `FRONTEND_URL`, `PORT`, `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`.
+3. Start the backend with `pnpm --filter backend start`; it applies pending Prisma migrations before starting the API.
 4. Seed demo credentials (only if this deployment is for review purposes).
 5. Deploy `apps/frontend` with `VITE_API_URL` pointing at the live backend.
 
@@ -298,3 +303,4 @@ Deployment configuration:
 - ✅ Live Backend — [Render](https://stockflow-api-x7w3.onrender.com/health)
 - ✅ Managed PostgreSQL — Supabase
 - ✅ GitHub Actions — automated test and build checks
+- ✅ AWS S3 Product Images — private bucket, least-privilege IAM, presigned upload/read URLs

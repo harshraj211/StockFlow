@@ -14,6 +14,7 @@ import { challanRouter } from "./routes/challan.routes.js";
 import { usersRouter } from "./routes/users.routes.js";
 import { dashboardRouter } from "./routes/dashboard.routes.js";
 import { activityRouter } from "./routes/activity.routes.js";
+import { productImageStorageConfigured } from "./s3.js";
 
 export const app = express();
 
@@ -62,7 +63,8 @@ app.get("/health", async (_req, res) => {
       database: "connected",
       env: {
         jwtSecret: config.jwtSecret ? "configured" : "missing",
-        databaseUrl: config.databaseUrl ? "configured" : "missing"
+        databaseUrl: config.databaseUrl ? "configured" : "missing",
+        productImageStorage: productImageStorageConfigured() ? "configured" : "missing"
       },
       timestamp: new Date().toISOString()
     });

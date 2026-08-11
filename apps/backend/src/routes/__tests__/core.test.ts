@@ -28,7 +28,19 @@ const prismaMock = {
   $transaction: vi.fn()
 };
 
+const s3Mock = vi.hoisted(() => ({
+  assertProductImageKey: vi.fn(),
+  createProductImageKey: vi.fn().mockReturnValue("products/product-1/test-image.webp"),
+  createProductImageUploadUrl: vi.fn().mockResolvedValue("https://signed-upload.example.test"),
+  deleteProductImage: vi.fn(),
+  inspectProductImage: vi.fn(),
+  MAX_PRODUCT_IMAGE_BYTES: 5 * 1024 * 1024,
+  productImageStorageConfigured: vi.fn().mockReturnValue(false),
+  productWithImageUrl: vi.fn(async (product) => ({ ...product, imageUrl: null }))
+}));
+
 vi.mock("../../db.js", () => ({ prisma: prismaMock }));
+vi.mock("../../s3.js", () => s3Mock);
 
 const { app } = await import("../../app.js");
 
@@ -94,6 +106,45 @@ describe("core API behavior", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.message).toContain("Insufficient stock");
+  });
+
+  it("creates a private S3 upload URL for warehouse users", async () => {
+    prismaMock.product.findUnique.mockResolvedValue({ id: "product-1", name: "Cable", imageKey: null });
+
+    const res = await request(app)
+      .post("/products/product-1/image/upload-url")
+      .set("Authorization", `Bearer ${token("WAREHOUSE")}`)
+      .send({ fileName: "cable.webp", contentType: "image/webp", size: 1024 });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      imageKey: "products/product-1/test-image.webp",
+      uploadUrl: "https://signed-upload.example.test",
+      expiresIn: 300
+    });
+    expect(s3Mock.createProductImageUploadUrl).toHaveBeenCalledWith(
+      "products/product-1/test-image.webp",
+      "image/webp"
+    );
+  });
+
+  it("rejects oversized product images before creating an upload URL", async () => {
+    const res = await request(app)
+      .post("/products/product-1/image/upload-url")
+      .set("Authorization", `Bearer ${token("WAREHOUSE")}`)
+      .send({ fileName: "large.png", contentType: "image/png", size: 5 * 1024 * 1024 + 1 });
+
+    expect(res.status).toBe(400);
+    expect(s3Mock.createProductImageUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it("prevents sales users from uploading product images", async () => {
+    const res = await request(app)
+      .post("/products/product-1/image/upload-url")
+      .set("Authorization", `Bearer ${token("SALES")}`)
+      .send({ fileName: "cable.png", contentType: "image/png", size: 1024 });
+
+    expect(res.status).toBe(403);
   });
 
   it("creates a validated follow-up note for a customer", async () => {

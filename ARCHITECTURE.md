@@ -6,6 +6,7 @@ StockFlow is a mini ERP + CRM portal for wholesale inventory, customer follow-up
 
 - **CRM**: customers, priorities, statuses, follow-up notes, account history, and customer-wise challan context.
 - **Inventory**: products, stock thresholds, stock movement ledger, low-stock filtering, and warehouse/location views.
+- **Product Media**: private AWS S3 objects with presigned browser uploads and short-lived read access.
 - **Sales Challans**: draft creation, confirmation, cancellation, status history, PDF generation, and challan-time item snapshots.
 - **Admin**: JWT login, roles, user management, activity logging, and access boundaries.
 - **Operations Dashboard**: KPIs, follow-up queue, low-stock alerts, recent challans, and audit visibility.
@@ -44,6 +45,26 @@ If the update affects `0` rows, the API rejects the confirmation with an insuffi
 
 Challan numbers are generated inside the create transaction and protected with retry handling for unique-key collisions. This keeps the human-readable format (`CH-2026-00001`) while avoiding a hard failure when two challans are created at nearly the same time.
 
+## Private Product Image Flow
+
+```mermaid
+sequenceDiagram
+  participant UI as React UI
+  participant API as Express API
+  participant S3 as Private S3 Bucket
+  participant DB as PostgreSQL
+  UI->>API: Request upload URL (name, type, size)
+  API->>API: Validate role, MIME type, and 5 MB limit
+  API-->>UI: Five-minute presigned PUT URL + object key
+  UI->>S3: Upload image directly
+  UI->>API: Complete upload with object key
+  API->>S3: HEAD object and verify type/size
+  API->>DB: Save imageKey on Product
+  API-->>UI: Product with one-hour presigned read URL
+```
+
+The bucket remains private with Block Public Access enabled. AWS credentials exist only in the API environment, are scoped to the `products/*` prefix, and are never sent to the browser.
+
 ## API Maturity
 
 - `GET /health` checks database reachability and required environment configuration.
@@ -51,4 +72,3 @@ Challan numbers are generated inside the create transaction and protected with r
 - `GET /docs` serves interactive Swagger documentation.
 - `/auth/login` has a stricter rate limit.
 - all API routes have a lighter general request limiter.
-

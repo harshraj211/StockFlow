@@ -9,7 +9,10 @@ export const openApiSpec = swaggerJSDoc({
       description:
         "JWT-secured APIs for CRM, inventory, sales challans, dashboard KPIs, activity logs, and admin users."
     },
-    servers: [{ url: "http://localhost:4000", description: "Local API" }],
+    servers: [
+      { url: "https://stockflow-api-x7w3.onrender.com", description: "Production API" },
+      { url: "http://localhost:4000", description: "Local API" }
+    ],
     components: {
       securitySchemes: {
         bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" }
@@ -46,7 +49,9 @@ export const openApiSpec = swaggerJSDoc({
             location: { type: "string" },
             unitPrice: { type: "number" },
             currentStock: { type: "integer" },
-            minimumStock: { type: "integer" }
+            minimumStock: { type: "integer" },
+            imageKey: { type: "string", nullable: true },
+            imageUrl: { type: "string", format: "uri", nullable: true, description: "Short-lived private S3 URL" }
           }
         },
         Challan: {
@@ -129,6 +134,43 @@ export const openApiSpec = swaggerJSDoc({
         post: {
           summary: "Create product",
           responses: { "201": { description: "Product created" }, "403": { description: "Role not allowed" } }
+        }
+      },
+      "/products/{id}/image/upload-url": {
+        post: {
+          summary: "Create a short-lived private S3 upload URL",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["fileName", "contentType", "size"],
+                  properties: {
+                    fileName: { type: "string" },
+                    contentType: { type: "string", enum: ["image/jpeg", "image/png", "image/webp"] },
+                    size: { type: "integer", maximum: 5242880 }
+                  }
+                }
+              }
+            }
+          },
+          responses: { "200": { description: "Presigned upload URL" }, "403": { description: "Role not allowed" } }
+        }
+      },
+      "/products/{id}/image/complete": {
+        post: {
+          summary: "Verify and attach an uploaded product image",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          responses: { "200": { description: "Product image attached" }, "400": { description: "Image verification failed" } }
+        }
+      },
+      "/products/{id}/image": {
+        delete: {
+          summary: "Delete a product image from private S3 storage",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          responses: { "200": { description: "Product image removed" } }
         }
       },
       "/challans": {

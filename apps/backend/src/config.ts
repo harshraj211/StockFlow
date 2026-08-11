@@ -16,5 +16,9 @@ export const config = {
   jwtSecret: requiredEnv("JWT_SECRET"),
   // Short-lived access tokens limit exposure if a browser token is compromised.
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
-  frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173"
+  frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
+  awsRegion: process.env.AWS_REGION,
+  awsS3Bucket: process.env.AWS_S3_BUCKET,
+  awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
 };

@@ -3,8 +3,24 @@ import { ActivityEntityType, MovementType, Role } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAuth, requireRoles } from "../auth.js";
 import { asyncHandler, HttpError, routeParam } from "../http.js";
-import { paginationQuery, productListQuery, productSchema, stockMovementSchema } from "../validators.js";
+import {
+  paginationQuery,
+  productImageCompleteSchema,
+  productImageUploadSchema,
+  productListQuery,
+  productSchema,
+  stockMovementSchema
+} from "../validators.js";
 import { logActivity } from "../activity.js";
+import {
+  assertProductImageKey,
+  createProductImageKey,
+  createProductImageUploadUrl,
+  deleteProductImage,
+  inspectProductImage,
+  MAX_PRODUCT_IMAGE_BYTES,
+  productWithImageUrl
+} from "../s3.js";
 
 export const productRouter = Router();
 productRouter.use(requireAuth);
@@ -48,7 +64,12 @@ productRouter.get(
       }),
       prisma.product.count({ where })
     ]);
-    return res.json({ items, page: query.page, limit: query.limit, total });
+    return res.json({
+      items: await Promise.all(items.map((product) => productWithImageUrl(product))),
+      page: query.page,
+      limit: query.limit,
+      total
+    });
   })
 );
 
@@ -69,7 +90,80 @@ productRouter.post(
       details: `${product.sku} at ${product.location}`,
       createdById: req.user!.id
     });
-    return res.status(201).json(product);
+    return res.status(201).json(await productWithImageUrl(product));
+  })
+);
+
+// POST /products/:id/image/upload-url  create a short-lived direct-to-S3 upload URL
+productRouter.post(
+  "/:id/image/upload-url",
+  requireRoles(Role.ADMIN, Role.WAREHOUSE),
+  asyncHandler(async (req, res) => {
+    const id = routeParam(req.params.id, "id");
+    const body = productImageUploadSchema.parse(req.body);
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) throw new HttpError(404, "Product not found");
+
+    const imageKey = createProductImageKey(id, body.contentType);
+    const uploadUrl = await createProductImageUploadUrl(imageKey, body.contentType);
+    return res.json({ imageKey, uploadUrl, expiresIn: 300, maxBytes: MAX_PRODUCT_IMAGE_BYTES });
+  })
+);
+
+// POST /products/:id/image/complete  verify the uploaded object before attaching it
+productRouter.post(
+  "/:id/image/complete",
+  requireRoles(Role.ADMIN, Role.WAREHOUSE),
+  asyncHandler(async (req, res) => {
+    const id = routeParam(req.params.id, "id");
+    const body = productImageCompleteSchema.parse(req.body);
+    assertProductImageKey(id, body.imageKey);
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) throw new HttpError(404, "Product not found");
+
+    try {
+      await inspectProductImage(body.imageKey);
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      throw new HttpError(400, "Uploaded image could not be verified");
+    }
+
+    const updated = await prisma.product.update({ where: { id }, data: { imageKey: body.imageKey } });
+    if (product.imageKey && product.imageKey !== body.imageKey) {
+      deleteProductImage(product.imageKey).catch((error) => console.warn("Unable to remove replaced product image", error));
+    }
+    await logActivity({
+      action: "PRODUCT_IMAGE_UPDATED",
+      entityType: ActivityEntityType.PRODUCT,
+      entityId: updated.id,
+      title: `${updated.name} product image updated`,
+      details: updated.sku,
+      createdById: req.user!.id
+    });
+    return res.json(await productWithImageUrl(updated));
+  })
+);
+
+// DELETE /products/:id/image  remove the object and clear the product reference
+productRouter.delete(
+  "/:id/image",
+  requireRoles(Role.ADMIN, Role.WAREHOUSE),
+  asyncHandler(async (req, res) => {
+    const id = routeParam(req.params.id, "id");
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) throw new HttpError(404, "Product not found");
+    if (product.imageKey) await deleteProductImage(product.imageKey);
+
+    const updated = await prisma.product.update({ where: { id }, data: { imageKey: null } });
+    await logActivity({
+      action: "PRODUCT_IMAGE_REMOVED",
+      entityType: ActivityEntityType.PRODUCT,
+      entityId: updated.id,
+      title: `${updated.name} product image removed`,
+      details: updated.sku,
+      createdById: req.user!.id
+    });
+    return res.json(await productWithImageUrl(updated));
   })
 );
 
@@ -90,7 +184,7 @@ productRouter.get(
       }
     });
     if (!product) throw new HttpError(404, "Product not found");
-    return res.json(product);
+    return res.json(await productWithImageUrl(product));
   })
 );
 
@@ -117,7 +211,7 @@ productRouter.put(
       details: `${updated.sku} stock ${updated.currentStock}, minimum ${updated.minimumStock}`,
       createdById: req.user!.id
     });
-    return res.json(updated);
+    return res.json(await productWithImageUrl(updated));
   })
 );
 
@@ -193,6 +287,6 @@ productRouter.post(
       details: `${body.quantity} units. Reason: ${body.reason}`,
       createdById: req.user!.id
     });
-    return res.status(201).json(result);
+    return res.status(201).json({ ...result, product: await productWithImageUrl(result.product) });
   })
 );

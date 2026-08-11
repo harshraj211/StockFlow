@@ -66,6 +66,16 @@ export const productSchema = z.object({
   location: z.string().min(2, "Location must be at least 2 characters")
 });
 
+export const productImageUploadSchema = z.object({
+  fileName: z.string().trim().min(1).max(160),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  size: z.coerce.number().int().positive().max(5 * 1024 * 1024, "Image must be 5 MB or smaller")
+});
+
+export const productImageCompleteSchema = z.object({
+  imageKey: z.string().trim().min(1).max(500)
+});
+
 export const stockMovementSchema = z.object({
   quantity: z.coerce.number().int().positive("Quantity must be a positive integer"),
   type: z.enum(["IN", "OUT"]),

@@ -11,6 +11,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   History,
+  ImagePlus,
   Info,
   Lock,
   LogOut,
@@ -26,6 +27,7 @@ import {
   Truck,
   Target,
   TrendingUp,
+  Trash2,
   Sun,
   UserCog,
   UserRoundPlus,
@@ -1723,6 +1725,8 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
   const [movementErrors, setMovementErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
   const [recordingMovement, setRecordingMovement] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageRemoving, setImageRemoving] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
 
   const categories = Array.from(new Set(products.map((product) => product.category))).sort();
@@ -1838,6 +1842,59 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
     }
   }
 
+  async function uploadProductImage(file: File) {
+    if (!selected) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setMessage("Choose a JPEG, PNG, or WebP image");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage("Product image must be 5 MB or smaller");
+      return;
+    }
+
+    setImageUploading(true);
+    try {
+      const signed = await api.post(`/products/${selected.id}/image/upload-url`, {
+        fileName: file.name,
+        contentType: file.type,
+        size: file.size
+      });
+      const uploaded = await fetch(signed.data.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file
+      });
+      if (!uploaded.ok) throw new Error("AWS rejected the image upload");
+
+      const completed = await api.post(`/products/${selected.id}/image/complete`, {
+        imageKey: signed.data.imageKey
+      });
+      setSelected({ ...completed.data, movements: selected.movements ?? [] });
+      setMessage("Product image updated");
+      await reload();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setImageUploading(false);
+    }
+  }
+
+  async function removeProductImage() {
+    if (!selected) return;
+    setImageRemoving(true);
+    try {
+      const response = await api.delete(`/products/${selected.id}/image`);
+      setSelected({ ...response.data, movements: selected.movements ?? [] });
+      setMessage("Product image removed");
+      await reload();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setImageRemoving(false);
+    }
+  }
+
   const filteredProducts = products;
 
   return (
@@ -1893,9 +1950,15 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
         </div>
         {loading && <SkeletonRows />}
         {!loading && filteredProducts.map((product) => (
-          <article className="row" key={product.id} onClick={() => onOpen(product.id)}>
-            <strong>{product.name} <StatusBadge label={stockLabel(product)} tone={stockTone(product)} /></strong>
-            <span>{product.sku} - {product.category} - {product.location}</span>
+          <article className="row product-row" key={product.id} onClick={() => onOpen(product.id)}>
+            <span className="product-thumb" aria-hidden="true">
+              {product.imageUrl ? <img src={product.imageUrl} alt="" /> : <PackagePlus size={19} />}
+            </span>
+            <span className="product-row-copy">
+              <strong>{product.name} <StatusBadge label={stockLabel(product)} tone={stockTone(product)} /></strong>
+              <small>{product.sku} - {product.category}</small>
+            </span>
+            <span>{product.location}</span>
             <small className={product.currentStock <= product.minimumStock ? "danger" : ""}>Stock {product.currentStock} / Min {product.minimumStock}</small>
             {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="secondary" onClick={(event) => { event.stopPropagation(); beginEdit(product); }}>Edit</button>}
           </article>
@@ -1914,6 +1977,44 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
                 {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="secondary" onClick={() => beginEdit(selected)}>Edit Product</button>}
               </div>
             </div>
+            <section className="product-image-panel" aria-label="Product image">
+              <div className="product-image-preview">
+                {selected.imageUrl ? <img src={selected.imageUrl} alt={selected.name} /> : <div><PackagePlus size={28} /><span>No product image</span></div>}
+              </div>
+              <div className="product-image-copy">
+                <span className="eyebrow">Private AWS S3 media</span>
+                <h3>Product Image</h3>
+                <p>JPEG, PNG, or WebP up to 5 MB. Access is delivered through short-lived secure links.</p>
+                {can(user, ["ADMIN", "WAREHOUSE"]) && (
+                  <div className="actions compact-actions">
+                    <input
+                      id={`product-image-${selected.id}`}
+                      className="visually-hidden"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) uploadProductImage(file);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={imageUploading || imageRemoving}
+                      onClick={() => document.getElementById(`product-image-${selected.id}`)?.click()}
+                    >
+                      <ImagePlus size={15} /> {imageUploading ? "Uploading..." : selected.imageUrl ? "Replace image" : "Upload image"}
+                    </button>
+                    {selected.imageUrl && (
+                      <button type="button" className="secondary danger-action" disabled={imageRemoving || imageUploading} onClick={removeProductImage}>
+                        <Trash2 size={15} /> {imageRemoving ? "Removing..." : "Remove"}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
             <div className="meta-grid">
               <p><strong>Current Stock</strong><br />{selected.currentStock}</p>
               <p><strong>Minimum Stock</strong><br />{selected.minimumStock}</p>

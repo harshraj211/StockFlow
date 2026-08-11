@@ -38,6 +38,8 @@ export type Product = {
   currentStock: number;
   minimumStock: number;
   location: string;
+  imageKey?: string | null;
+  imageUrl?: string | null;
   movements?: StockMovement[];
 };
 
@@ -116,6 +118,7 @@ export function errorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
     return error.response?.data?.message ?? error.message;
   }
+  if (error instanceof Error) return error.message;
   return "Something went wrong";
 }
 
