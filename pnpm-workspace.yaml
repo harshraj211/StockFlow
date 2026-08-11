@@ -1,5 +1,7 @@
 packages:
   - "apps/*"
+allowBuilds:
+  '@scarf/scarf': false
 onlyBuiltDependencies:
   - "@prisma/client"
   - "@prisma/engines"
