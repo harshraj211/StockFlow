@@ -2059,28 +2059,42 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
                 <button className="secondary locked" disabled title={`${user.role} can inspect stock history but cannot record movements`}><Lock size={14} /> Record Stock Movement</button>
               </div>
             )}
-            <h3>Inventory Audit Trail</h3>
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>Type</th><th>Quantity</th><th>Reason</th><th>By</th><th>Date</th></tr></thead>
-                <tbody>
-                  {(selected.movements ?? []).map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.type}</td>
-                      <td>{item.quantity}</td>
-                      <td>{item.reason}</td>
-                      <td>{item.createdBy?.name ?? "System"}</td>
-                      <td>{new Date(item.createdAt).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                  {(selected.movements ?? []).length === 0 && (
-                    <tr>
-                      <td colSpan={5}>No stock movements recorded yet.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <section className="ledger-section inventory-audit-section" aria-labelledby="inventory-audit-heading">
+              <div className="section-heading">
+                <div>
+                  <h3 id="inventory-audit-heading">Inventory Audit Trail</h3>
+                  <p className="muted">A chronological record of every stock adjustment.</p>
+                </div>
+              </div>
+              <div className="table-wrap">
+                <table className="data-table inventory-audit-table">
+                  <colgroup>
+                    <col className="audit-type-column" />
+                    <col className="audit-quantity-column" />
+                    <col className="audit-reason-column" />
+                    <col className="audit-user-column" />
+                    <col className="audit-date-column" />
+                  </colgroup>
+                  <thead><tr><th>Type</th><th>Quantity</th><th>Reason</th><th>By</th><th>Date</th></tr></thead>
+                  <tbody>
+                    {(selected.movements ?? []).map((item) => (
+                      <tr key={item.id}>
+                        <td><StatusBadge label={item.type} tone={item.type === "IN" ? "success" : "warning"} /></td>
+                        <td className="qty">{item.type === "IN" ? "+" : "-"}{item.quantity}</td>
+                        <td>{item.reason}</td>
+                        <td>{item.createdBy?.name ?? "System"}</td>
+                        <td><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></td>
+                      </tr>
+                    ))}
+                    {(selected.movements ?? []).length === 0 && (
+                      <tr>
+                        <td colSpan={5}>No stock movements recorded yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
         )}
       </div>

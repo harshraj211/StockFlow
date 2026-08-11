@@ -423,6 +423,17 @@ small { color: var(--muted); }
 .data-table td > small { font-size: 10px; margin-top: 3px; }
 .data-table td strong { font-size: 12px; }
 .exception-table { min-width: 840px; }
+.inventory-audit-section { border-bottom: 0; margin-top: 6px; padding-bottom: 0; }
+.inventory-audit-section .section-heading h3 { font-size: 14px; margin-bottom: 3px; }
+.inventory-audit-table { min-width: 720px; table-layout: fixed; }
+.inventory-audit-table .audit-type-column { width: 96px; }
+.inventory-audit-table .audit-quantity-column { width: 104px; }
+.inventory-audit-table .audit-reason-column { width: auto; }
+.inventory-audit-table .audit-user-column { width: 180px; }
+.inventory-audit-table .audit-date-column { width: 190px; }
+.inventory-audit-table td:nth-child(3) { overflow-wrap: anywhere; }
+.inventory-audit-table td:nth-child(4),
+.inventory-audit-table td:nth-child(5) { white-space: nowrap; }
 .record-button { align-items: flex-start; display: flex; flex-direction: column; text-align: left; }
 .record-button span { color: var(--muted); font-size: 10px; font-weight: 400; margin-top: 3px; }
 .table-action { font-size: 11px; white-space: nowrap; }
