@@ -100,7 +100,7 @@ jobs:
 
       - name: Install packages and apply database migrations
         env:
-          DATABASE_URL: ${{ secrets.AWS_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.AWS_DIRECT_DATABASE_URL }}
         run: |
           pnpm install --frozen-lockfile
           pnpm --filter backend exec prisma migrate deploy
