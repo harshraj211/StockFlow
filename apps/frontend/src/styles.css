@@ -1,7 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
 :root {
   color: #172033;
   background: #f6f8fb;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -1905,5 +1907,281 @@ th {
   .visual-stat,
   .pulse-dot {
     animation: none;
+  }
+}
+
+/* Shared workspace visual refresh */
+.app-shell {
+  background: #f7f8fa;
+  grid-template-columns: 232px 1fr;
+}
+
+.sidebar {
+  background: #ffffff;
+  border-color: #eaedf1;
+}
+
+.sidebar-main {
+  gap: 26px;
+  padding: 22px 12px;
+}
+
+.brand {
+  padding: 0 12px 14px;
+}
+
+.brand h2 {
+  font-size: 17px;
+  letter-spacing: 0;
+}
+
+.sidebar nav,
+.quick-actions {
+  gap: 4px;
+}
+
+.sidebar button {
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 9px 11px;
+}
+
+.sidebar button.active {
+  background: #087d74;
+  border-color: #087d74;
+  box-shadow: 0 4px 10px rgba(8, 125, 116, .14);
+}
+
+.sidebar button.active:hover {
+  background: #087d74;
+}
+
+.sidebar-footer,
+.quick-actions {
+  border-color: #edf0f3;
+}
+
+.workspace {
+  background: #f7f8fa;
+}
+
+.topbar {
+  background: #fff;
+  border-color: #eaedf1;
+  min-height: 72px;
+  padding: 0 28px;
+}
+
+.search {
+  background: #f8fafb;
+  border-color: #e4e8ed;
+  border-radius: 6px;
+}
+
+.icon-button {
+  background: transparent;
+}
+
+.page-title {
+  padding: 28px 28px 4px;
+}
+
+.page-title h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin-bottom: 6px;
+}
+
+.page-title p {
+  color: #697586;
+  font-size: 14px;
+}
+
+.ops-layout,
+.two-column,
+.walkthrough-page,
+.activity-page {
+  gap: 20px;
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+.dashboard-stack {
+  gap: 18px;
+}
+
+.alert-strip {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  gap: 10px;
+  overflow: visible;
+}
+
+.alert-strip article {
+  background: #fff;
+  border: 1px solid #e6eaee;
+  border-radius: 6px;
+  box-shadow: 0 1px 1px rgba(16, 24, 40, .02);
+  padding: 15px;
+}
+
+.alert-strip article:last-child {
+  border-right: 1px solid #e6eaee;
+}
+
+.alert-strip strong {
+  font-size: 13px;
+}
+
+.metric,
+.panel,
+.detail-rail,
+.summary-card,
+.detail-page {
+  border-color: #e5e9ee;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .025);
+}
+
+.panel {
+  gap: 16px;
+  padding: 18px;
+}
+
+.metric {
+  gap: 6px;
+  min-height: 106px;
+  padding: 16px 18px;
+}
+
+.metric span,
+.metric small,
+.panel-toolbar span,
+.activity-row p,
+.timeline-item p {
+  color: #697586;
+}
+
+.metric strong {
+  font-size: 25px;
+  letter-spacing: 0;
+}
+
+.metric small {
+  font-weight: 700;
+}
+
+.panel-toolbar h2,
+.rail-header h2 {
+  font-size: 15px;
+}
+
+.action-card,
+.action-row,
+.focus-card,
+.row,
+.activity-row,
+.meta-grid p {
+  border-color: #e8ebef;
+  border-radius: 6px;
+}
+
+.action-card,
+.action-row,
+.focus-card,
+.row {
+  box-shadow: none;
+}
+
+.action-card:hover,
+.action-row:hover {
+  background: #fbfdfd;
+  border-color: #b8ded9;
+}
+
+.filter-bar,
+.filter-grid {
+  gap: 8px;
+}
+
+input,
+select,
+textarea {
+  border-color: #dfe4ea;
+  border-radius: 6px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #4aa99f;
+  box-shadow: 0 0 0 3px rgba(8, 125, 116, .11);
+  outline: 0;
+}
+
+button {
+  background: #087d74;
+  border-color: #087d74;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+button:hover {
+  background: #056b64;
+}
+
+.ghost,
+.secondary {
+  border-color: #dce3e9;
+}
+
+.data-table th {
+  background: #fafbfc;
+  color: #596678;
+  font-size: 11px;
+  letter-spacing: 0;
+  padding: 11px 12px;
+  text-transform: uppercase;
+}
+
+.data-table td {
+  border-color: #edf0f3;
+  padding: 12px;
+}
+
+.data-table tbody tr:hover {
+  background: #fbfdfd;
+}
+
+.detail-rail {
+  background: #fff;
+  min-height: calc(100vh - 104px);
+  padding: 18px;
+  top: 16px;
+}
+
+.summary-card {
+  padding: 14px;
+}
+
+.status-badge {
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 5px 7px;
+}
+
+@media (max-width: 920px) {
+  .topbar,
+  .page-title,
+  .ops-layout,
+  .two-column,
+  .walkthrough-page,
+  .activity-page {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
