@@ -1,29 +1,44 @@
-# Mini ERP + CRM Operations Portal
+# StockFlow — Mini ERP + CRM Operations Portal
 
-Full-stack case study for a wholesale/distribution business. The app covers authentication, role-based access control (RBAC), customer CRM with follow-up tracking, product inventory management, stock movement audit logs, and sales challans with automatic stock deduction and snapshot preservation.
+![Node](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Express](https://img.shields.io/badge/Express.js-backend-000000?logo=express&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma_ORM-4169E1?logo=postgresql&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-## Tech Stack
-
-- **Backend**: Node.js, TypeScript, Express.js, Prisma ORM, PostgreSQL, JWT, Zod, Helmet, Express Rate Limit
-- **Frontend**: React 19, TypeScript, Vite, CSS (Vanilla Design System)
-- **DevOps**: Docker Compose (PostgreSQL), Environment-based configuration
+A full-stack case study for a wholesale/distribution business — authentication and role-based access, customer CRM with follow-up tracking, product inventory with a real stock movement ledger, and a sales challan engine with atomic, race-safe stock deduction.
 
 ---
 
-## Key Backend Features & Enhancements
+## 🎥 For Reviewers — Start Here
 
-- **Reviewer Walkthrough Mode**: In-app guide that explains seeded credentials, demo flow, role boundaries, and business rules for fast project evaluation.
-- **JWT Authentication & RBAC**: Roles (`ADMIN`, `SALES`, `WAREHOUSE`, `ACCOUNTS`) with granular endpoint protection and user account activation control (`isActive`).
-- **Security & Rate Limiting**: Built-in rate limiting on `/auth/login` (20 req/15min) and Helmet HTTP security headers.
-- **Health Check API**: `GET /health` conducts a live database ping check (`SELECT 1`).
-- **Executive Dashboard KPIs**: `GET /dashboard/stats` provides total revenue, active/lead customer breakdowns, low-stock inventory items, upcoming follow-ups, and recent sales challans.
-- **Customer CRM Module**: Full CRUD, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
-- **Product & Inventory Module**: Product management with SKU uniqueness enforcement, category/location tracking, stock level warnings, and full stock movement audit logging (`IN` / `OUT` with reason & user attribution).
-- **Sales Challan Engine**: Multi-product challan creation (Draft or Confirmed), auto-generated sequential numbers (`CH-2026-00001`), snapshotting of product details (name, SKU, unit price), total amount computation, and atomic database transactions ensuring stock never drops below zero.
-- **Dedicated Challan Status History**: Every challan lifecycle event is stored with from/to status, note, actor, role, and timestamp for document-level auditability.
-- **Admin User Management**: `ADMIN` role can list users, register new team members, adjust roles, and activate/deactivate accounts.
-- **Operational UI Polish**: Customer/product edit flows, route-based record detail URLs, direct notification-to-record opening, product filters, low-stock-only view, manual stock movement entry, product movement audit trail, challan lifecycle timeline, professional browser print flow, server-generated PDF download, pagination controls, and role-aware read-only states.
-- **Backend Test Coverage**: Tests cover login, role denial, negative stock prevention, and challan confirmation stock deduction.
+If you only have 5 minutes:
+
+| | |
+|---|---|
+| **Live App** | `<add your Vercel/Netlify URL here>` |
+| **Live API** | `<add your Render/Railway URL here>` |
+| **60–90s Demo Video** | `<add your Loom/YouTube link here>` |
+| **API Docs (Swagger)** | `<live-backend-url>/docs` |
+| **Test Credentials** | See [Test Credentials](#test-credentials) below — all roles use `Password@123` |
+
+The single feature worth watching in the demo video: creating a sales challan, confirming it, and watching the API **reject a second confirm that would oversell stock** — that's the core business-logic test this case study is built around, and it's covered end-to-end (see [Design Notes](#design-notes--what-i-learned-building-this) below).
+
+---
+
+## Table of Contents
+
+- [What Makes StockFlow Different](#what-makes-stockflow-different)
+- [Tech Stack](#tech-stack)
+- [Test Credentials](#test-credentials)
+- [Local Setup](#local-setup)
+- [API Reference](#api-endpoints-reference)
+- [Architecture](#architecture--code-design)
+- [Design Notes](#design-notes--what-i-learned-building-this)
+- [Known Limitations](#known-limitations--incomplete-parts)
+- [Deployment](#deployment)
+- [Submission Deliverables](#submission-deliverables)
 
 ---
 
@@ -31,12 +46,38 @@ Full-stack case study for a wholesale/distribution business. The app covers auth
 
 Most submissions for this case study can stop at CRUD. StockFlow adds business-facing reliability and reviewer-friendly product depth:
 
-1. **Actionable Dashboard**: Low stock, follow-up, draft challan, revenue, and operational exception signals are visible from the first screen.
-2. **Notification Deep Links**: Alerts open the exact customer, product, or challan record that needs attention.
-3. **Audit Thinking**: Global Activity Log, customer activity, inventory movements, and challan lifecycle events are visible in timeline or ledger format.
-4. **Strong Business Rules**: Stock confirmation is transactional, duplicate SKUs are blocked, and insufficient stock leaves the database unchanged.
-5. **Professional Document Output**: Challan print view includes StockFlow branding, customer details, item table, totals, notes, and signature area.
-6. **Role Demonstration**: Admin, Sales, Warehouse, and Accounts accounts show different permission boundaries clearly in the UI and API.
+1. **Actionable Dashboard** — low stock, follow-up, draft challan, revenue, and operational exception signals are visible from the first screen.
+2. **Notification Deep Links** — alerts open the exact customer, product, or challan record that needs attention.
+3. **Audit Thinking** — a global Activity Log, customer activity, inventory movements, and challan lifecycle events are all visible in timeline or ledger format.
+4. **Race-Safe Business Rules** — stock confirmation uses a conditional atomic decrement, not a check-then-write pattern, so concurrent confirms can't oversell (see [Design Notes](#design-notes--what-i-learned-building-this)).
+5. **Professional Document Output** — challan print view includes branding, customer details, item table, totals, notes, and a signature area.
+6. **Role Demonstration** — Admin, Sales, Warehouse, and Accounts accounts show different permission boundaries clearly in both the UI and the API.
+
+---
+
+## Tech Stack
+
+- **Backend**: Node.js, TypeScript, Express.js, Prisma ORM, PostgreSQL, JWT, Zod, Helmet, Express Rate Limit
+- **Frontend**: React 19, TypeScript, Vite, CSS (Vanilla Design System)
+- **DevOps**: Docker Compose (PostgreSQL), environment-based configuration
+
+---
+
+## Key Backend Features & Enhancements
+
+- **Reviewer Walkthrough Mode**: in-app guide explaining seeded credentials, demo flow, role boundaries, and business rules for fast evaluation.
+- **JWT Authentication & RBAC**: roles (`ADMIN`, `SALES`, `WAREHOUSE`, `ACCOUNTS`) with granular endpoint protection and account activation control (`isActive`).
+- **Security & Rate Limiting**: rate limiting on `/auth/login` (20 req/15min), a lighter general API limiter, required JWT secret validation, and Helmet HTTP security headers.
+- **Health Check API**: `GET /health` runs a live database ping (`SELECT 1`) and reports required-env readiness.
+- **Swagger/OpenAPI Docs**: `GET /docs` serves interactive API documentation; `GET /openapi.json` exposes the raw contract.
+- **Executive Dashboard KPIs**: `GET /dashboard/stats` returns revenue, active/lead breakdowns, low-stock items, upcoming follow-ups, and recent challans.
+- **Customer CRM Module**: full CRUD, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
+- **Product & Inventory Module**: SKU uniqueness enforcement, category/location tracking, stock-level warnings, and a full IN/OUT stock movement audit log with reason and user attribution.
+- **Sales Challan Engine**: multi-product draft/confirmed creation, retry-safe sequential numbers (`CH-2026-00001`), snapshotting of product details, total amount computation, and atomic guarded stock decrements that never let stock go negative.
+- **Challan Status History**: every lifecycle event stored with from/to status, note, actor, role, and timestamp for full auditability.
+- **Admin User Management**: list, register, adjust roles, activate/deactivate accounts.
+- **Operational UI Polish**: route-based record URLs, notification deep-links, product filters, low-stock view, manual stock entry, challan lifecycle timeline, browser print, server-generated PDF, pagination, role-aware read-only states.
+- **Backend Test Coverage**: unit tests for login, role denial, negative stock prevention, challan confirmation — plus an optional real-Postgres integration suite (see [Local Setup](#local-setup)).
 
 ---
 
@@ -45,7 +86,7 @@ Most submissions for this case study can stop at CRUD. StockFlow adds business-f
 All seeded accounts use the password: `Password@123`
 
 | Role | Email | Permissions |
-| -- | -- | -- |
+|---|---|---|
 | **Admin** | `admin@fundsroom.test` | Full operational access + user management |
 | **Sales** | `sales@fundsroom.test` | Manage customers, follow-up notes, create/edit challans |
 | **Warehouse** | `warehouse@fundsroom.test` | Manage products & execute stock movements |
@@ -56,30 +97,23 @@ All seeded accounts use the password: `Password@123`
 ## Local Setup
 
 ### 1. Install Dependencies
-
 ```bash
 pnpm install
 ```
 
 ### 2. Configure Environment Variables
-
-Copy the sample env files:
-
 ```bash
 cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env
 ```
 
 ### 3. Start Database (PostgreSQL)
-
-If using Docker:
 ```bash
 docker compose up -d
 ```
 *(Alternatively, supply your own PostgreSQL connection string in `apps/backend/.env`)*
 
 ### 4. Database Migration & Seeding
-
 ```bash
 pnpm db:generate
 pnpm db:migrate
@@ -87,135 +121,194 @@ pnpm db:seed
 ```
 
 ### 5. Start Development Servers
-
 ```bash
 pnpm dev
 ```
 
-Default local endpoints:
-- **Frontend App**: `http://localhost:5173`
-- **Backend API**: `http://localhost:4000`
-- **Health Check**: `http://localhost:4000/health`
+| Service | URL |
+|---|---|
+| Frontend App | `http://localhost:5173` |
+| Backend API | `http://localhost:4000` |
+| Health Check | `http://localhost:4000/health` |
+| API Docs (Swagger) | `http://localhost:4000/docs` |
+| OpenAPI JSON | `http://localhost:4000/openapi.json` |
 
 ### 6. Run Tests
-
 ```bash
 pnpm --filter backend test
 pnpm build
 ```
 
+For a real Postgres stock-safety check against a live database rather than a mock:
+```bash
+TEST_DATABASE_URL="postgresql://..." RUN_INTEGRATION_TESTS=true pnpm --filter backend test
+```
+The integration suite creates and removes only its own `integration-*` records and will not run without `TEST_DATABASE_URL` set.
+
 ---
 
 ## API Endpoints Reference
 
-All endpoints (except `/auth/login` and `/health`) require:
-`Authorization: Bearer <token>`
+All endpoints (except `/auth/login` and `/health`) require `Authorization: Bearer <token>`.
 
-### Auth & Health
-- `GET  /health` - Live database status check
-- `POST /auth/login` - Authenticate user & return JWT token (rate-limited)
+### Auth, Docs & Health
+- `GET  /health` — live database status check
+- `GET  /docs` — interactive Swagger/OpenAPI documentation
+- `GET  /openapi.json` — raw OpenAPI 3.0 contract
+- `POST /auth/login` — authenticate & return JWT (rate-limited)
 
 ### Executive Dashboard
-- `GET  /dashboard/stats` - Consolidated KPIs, revenue, low stock list, & upcoming follow-ups
+- `GET  /dashboard/stats` — consolidated KPIs, revenue, low stock list, upcoming follow-ups
 
 ### Customers (CRM)
-- `GET  /customers` - List customers (supports `page`, `limit`, `search`)
-- `POST /customers` - Create new customer (`ADMIN`, `SALES`)
-- `GET  /customers/:id` - Get customer details + follow-up history
-- `PUT  /customers/:id` - Update customer details (`ADMIN`, `SALES`)
-- `POST /customers/:id/follow-ups` - Append follow-up note (`ADMIN`, `SALES`)
+- `GET  /customers` — list (supports `page`, `limit`, `search`)
+- `POST /customers` — create (`ADMIN`, `SALES`)
+- `GET  /customers/:id` — details + follow-up history
+- `PUT  /customers/:id` — update (`ADMIN`, `SALES`)
+- `POST /customers/:id/follow-ups` — append follow-up note (`ADMIN`, `SALES`)
 
 ### Activity Log
-- `GET  /activity` - Global activity stream (supports `page`, `limit`, `search`)
+- `GET  /activity` — global activity stream (supports `page`, `limit`, `search`)
 
 ### Products & Inventory
-- `GET  /products` - List products (supports `page`, `limit`, `search`)
-- `POST /products` - Add product (`ADMIN`, `WAREHOUSE`)
-- `GET  /products/:id` - Get product details + recent stock movements
-- `PUT  /products/:id` - Edit product (`ADMIN`, `WAREHOUSE`)
-- `GET  /products/:id/movements` - View paginated stock movement audit trail
-- `POST /products/:id/movements` - Manual stock adjustment (`IN`/`OUT`) (`ADMIN`, `WAREHOUSE`)
+- `GET  /products` — list (supports `page`, `limit`, `search`)
+- `POST /products` — add (`ADMIN`, `WAREHOUSE`)
+- `GET  /products/:id` — details + recent stock movements
+- `PUT  /products/:id` — edit (`ADMIN`, `WAREHOUSE`)
+- `GET  /products/:id/movements` — paginated stock movement audit trail
+- `POST /products/:id/movements` — manual IN/OUT adjustment (`ADMIN`, `WAREHOUSE`)
 
 ### Sales Challans
-- `GET   /challans` - List sales challans (supports `page`, `limit`, `search`)
-- `POST  /challans` - Create challan (Draft or Confirmed) (`ADMIN`, `SALES`)
-- `GET   /challans/:id` - View complete challan details with item snapshots
-- `GET   /challans/:id/pdf` - Download server-generated challan PDF
-- `PATCH /challans/:id/notes` - Update notes on draft challan (`ADMIN`, `SALES`)
-- `PATCH /challans/:id/status` - Change status to `CONFIRMED` or `CANCELLED` (`ADMIN`, `SALES`, `ACCOUNTS`)
+- `GET   /challans` — list (supports `page`, `limit`, `search`)
+- `POST  /challans` — create, Draft or Confirmed (`ADMIN`, `SALES`)
+- `GET   /challans/:id` — full detail with item snapshots
+- `GET   /challans/:id/pdf` — server-generated challan PDF
+- `PATCH /challans/:id/notes` — update notes on a Draft challan (`ADMIN`, `SALES`)
+- `PATCH /challans/:id/status` — confirm or cancel (`ADMIN`, `SALES`, `ACCOUNTS`)
 
-### User Management (`ADMIN` Only)
-- `GET   /users` - List all internal users
-- `POST  /users` - Create user account
-- `PUT   /users/:id` - Update user name or role
-- `PATCH /users/:id/deactivate` - Soft-deactivate user account
-- `PATCH /users/:id/activate` - Re-activate user account
+### User Management (`ADMIN` only)
+- `GET   /users` — list all internal users
+- `POST  /users` — create a user account
+- `PUT   /users/:id` — update name or role
+- `PATCH /users/:id/deactivate` — soft-deactivate
+- `PATCH /users/:id/activate` — re-activate
 
 ---
 
 ## Postman Collection
 
-A complete, production-ready Postman collection is included in `postman/Mini_ERP_CRM.postman_collection.json`. **Features of the Postman Collection:**
-- **Auto-Token Capture**: Logging in as any user automatically sets the `{{token}}` collection variable for all subsequent requests.
-- **Auto-ID Capture**: Creating a customer, product, or challan automatically populates `{{customerId}}`, `{{productId}}`, and `{{challanId}}`.
-- **Negative & Role Validation Tests**: Includes test cases for insufficient stock errors, invalid credentials, and non-admin permission denials (403).
+A complete, production-ready Postman collection is included at `postman/Mini_ERP_CRM.postman_collection.json`:
+- **Auto-Token Capture** — logging in as any user sets `{{token}}` for all subsequent requests.
+- **Auto-ID Capture** — creating a customer, product, or challan populates `{{customerId}}`, `{{productId}}`, `{{challanId}}`.
+- **Negative & Role Validation Tests** — insufficient-stock errors, invalid credentials, 403s on non-admin actions.
+
+Interactive documentation is also served live from the backend at `/docs`, with the raw contract at `/openapi.json`.
 
 ---
 
 ## Architecture & Code Design
 
+Full diagrams and reasoning live in [`ARCHITECTURE.md`](./ARCHITECTURE.md), covering the challan confirmation flow, concurrency handling, and the design tradeoffs behind the atomic stock-decrement approach.
+
 ### Backend (`apps/backend`)
-- `src/app.ts`: Express application setup, security middleware (Helmet, Rate Limiter, CORS), route mounting, and central error handling.
-- `src/auth.ts`: Auth middleware verifying JWT signatures and enforcing role-based permissions (`requireRoles`).
-- `src/routes/*`: Modular REST controllers for Auth, Customers, Products, Challans, Users, and Dashboard.
-- `src/validators.ts`: Type-safe request body & parameter validation using Zod.
-- `src/http.ts`: Standardized HTTP error class and async route handler wrapper.
-- `prisma/schema.prisma`: Data models with relations, enums, indexes, and precision numeric types (`Decimal(12,2)`).
+- `src/app.ts` — Express setup, security middleware (Helmet, rate limiter, CORS), route mounting, central error handling
+- `src/auth.ts` — JWT verification middleware and role-based guards (`requireRoles`)
+- `src/routes/*` — modular REST controllers per domain (Auth, Customers, Products, Challans, Users, Dashboard)
+- `src/validators.ts` — Zod request validation
+- `src/http.ts` — standardized error class and async handler wrapper
+- `prisma/schema.prisma` — data models, enums, indexes, `Decimal(12,2)` precision types
 
 ### Frontend (`apps/frontend`)
-- Walkthrough: Reviewer-ready demo guide, credentials, module shortcuts, and business-rule highlights.
-- Dashboard: Revenue KPIs, low-stock alerts, upcoming follow-ups, direct notification actions, and recent challans.
-- Customers: Add/edit customers, Hot/Warm/Cold priority, follow-up filters, full detail view, and follow-up notes.
-- Products: Add/edit products, status badges, category/location/low-stock filters, reorder suggestion, manual stock movement, and audit history.
-- Challans: Create draft/confirmed challans, detail view, lifecycle timeline, draft notes, confirm/cancel actions, professional browser print, and server PDF download.
-- Activity: Global audit stream across CRM, inventory, challans, and admin actions.
-- Deep Links: Customer, product, and challan details support real URLs (`/customers/:id`, `/products/:id`, `/challans/:id`) with browser history support.
-- Lists: API-backed pagination controls on customer, product, challan, and user lists.
-- Users: Admin-only user creation, role updates, activation, and deactivation.
+- Walkthrough — reviewer-ready demo guide, credentials, module shortcuts, business-rule highlights
+- Dashboard — revenue KPIs, low-stock alerts, upcoming follow-ups, notification actions, recent challans
+- Customers — add/edit, Hot/Warm/Cold priority, follow-up filters, detail view, notes
+- Products — add/edit, status badges, category/location/low-stock filters, reorder suggestion, manual stock movement, audit history
+- Challans — draft/confirmed creation, detail view, lifecycle timeline, notes, confirm/cancel, print, PDF export
+- Activity — global audit stream across CRM, inventory, challans, admin actions
+- Deep Links — real URLs for records (`/customers/:id`, `/products/:id`, `/challans/:id`) with browser history support
+- Lists — API-backed pagination throughout
+- Users — admin-only creation, role updates, activation/deactivation
+
+---
+
+## Design Notes — What I Learned Building This
+
+**Stock deduction is the one part of this system that can't be "mostly correct."** Two design decisions came out of thinking through that:
+
+1. **Challan numbers are generated retry-safe, not just sequentially.** An earlier version counted existing challans and incremented — fine until two challans get created close together and collide on the same number. Fixed by generating inside the same transaction with a retry path on unique-constraint conflicts, rather than trusting a read-then-write outside the transaction boundary.
+2. **Stock deduction uses a conditional atomic update, not check-then-write.** A naive implementation reads `currentStock`, compares it to the requested quantity, then writes the decrement — which is unsafe if two challans confirm against the same product at nearly the same moment; both can pass the check before either commits. The fix updates and checks in one atomic operation (`UPDATE ... WHERE currentStock >= quantity`, then checking the affected row count), so the database itself enforces the invariant instead of application logic racing against itself.
+
+This is also why there's an optional real-Postgres integration test path (see [Local Setup](#local-setup)) — the unit tests mock Prisma and can prove the logic is wired correctly, but only a test against a real database can prove the race condition is actually closed.
+
+---
+
+## Known Limitations & Incomplete Parts
+
+Being upfront about scope boundaries and tradeoffs made under the assignment's time constraint:
+
+- **Confirmed challans cannot be cancelled or edited**, only Draft ones. Reversing a confirmed challan (e.g. a customer return) would need a separate credit/return flow, which is out of scope here — this is a deliberate assumption, not an oversight, and is documented in [Key Assumptions](#key-assumptions--business-logic) below.
+- **No multi-warehouse stock allocation.** `location` is stored per product as a single field; the schema doesn't yet support splitting one SKU's stock across multiple warehouses with independent reorder thresholds.
+- **No refresh-token flow.** Auth issues a single JWT on login with a fixed expiry; there's no silent-refresh or long-lived session handling, which a production system would want.
+- **No file/image upload.** Product photos and document attachments (e.g. scanned PO) aren't supported — S3 upload was considered but deprioritized in favor of correctness-critical backend work.
+- **Frontend is a single-file React app (`App.tsx`).** It works and is fully functional, but isn't split into `pages/`/`components/` the way a larger production codebase would be — a conscious tradeoff to prioritize backend business logic within the time available.
+- **No CI pipeline.** Tests and build run locally/on-demand; there's no GitHub Actions workflow gating merges yet.
 
 ---
 
 ## Key Assumptions & Business Logic
 
-1. **Stock Deduction**: Stock is deducted inside a serializable Prisma transaction only when a challan is set to `CONFIRMED` state.
-2. **Negative Stock Prevention**: Transactions fail atomically with HTTP 400 if product stock is lower than requested quantity.
-3. **Data Immutability (Snapshots)**: Product details (name, SKU, unit price, category) are snapshot into `SalesChallanItem` rows upon creation, preserving historical records even if product details change later.
-4. **Draft Cancellation**: Challans can only be cancelled from `DRAFT` status. Confirmed challans cannot be cancelled directly to maintain audit trail consistency.
+1. **Stock Deduction** — stock is deducted inside a Prisma transaction only when a challan moves to `CONFIRMED`.
+2. **Negative Stock Prevention** — each line item uses a conditional atomic decrement (`currentStock >= requestedQuantity`). If any product can't satisfy the request, the transaction fails with HTTP 400 and nothing is partially committed.
+3. **Data Immutability (Snapshots)** — product details (name, SKU, unit price, category) are snapshotted into `SalesChallanItem` at creation time, preserving historical accuracy even if the product record changes later.
+4. **Draft Cancellation** — challans can only be cancelled from `DRAFT`. Confirmed challans stay confirmed, to keep the audit trail consistent (see [Known Limitations](#known-limitations--incomplete-parts) above for the implication of this).
+
+---
+
+## Deployment
+
+<!-- Fill this in once deployed -->
+- **Database**: `<Neon / Supabase / Render Postgres — add connection details or just confirm deployed>`
+- **Backend**: `<Render / Railway / Fly.io URL>`
+- **Frontend**: `<Vercel / Netlify URL>`
+
+To deploy:
+1. Provision a Postgres instance (Neon/Supabase/Render).
+2. Deploy `apps/backend` with env vars `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `FRONTEND_URL`, `PORT`.
+3. Run `pnpm --filter backend exec prisma migrate deploy` against the production database.
+4. Seed demo credentials (only if this deployment is for review purposes).
+5. Deploy `apps/frontend` with `VITE_API_URL` pointing at the live backend.
+6. Update the links in [For Reviewers](#-for-reviewers--start-here) above.
 
 ---
 
 ## Submission Deliverables
 
-- **GitHub Repository**: Included
-- **Postman Collection**: `postman/Mini_ERP_CRM.postman_collection.json`
-- **Seeded Credentials**: Admin, Sales, Warehouse, Accounts (`Password@123`)
-- **Documentation**: Comprehensive README with setup, architecture, and API specs
+- ✅ GitHub Repository
+- ✅ Postman Collection — `postman/Mini_ERP_CRM.postman_collection.json`
+- ✅ Swagger/OpenAPI — `/docs` and `/openapi.json`
+- ✅ Architecture Notes — [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- ✅ Seeded Credentials — Admin, Sales, Warehouse, Accounts (`Password@123`)
+- ✅ README — setup, architecture, API spec, known limitations
+- ⬜ Live Frontend URL — *add before submitting*
+- ⬜ Live Backend URL — *add before submitting*
+- ⬜ Demo Recording — *add before submitting*
 
 ---
 
 ## Demo Recording Checklist
 
-Recommended 4-6 minute walkthrough:
+Recommended 4–6 minute walkthrough:
 
-1. Login as Admin and show dashboard KPIs.
-2. Open the Walkthrough page and explain roles plus business rules.
-3. Click a notification and show it opens the exact record needing attention.
-4. Add or edit a customer and add a follow-up note.
-5. Filter customers by follow-up state and show the customer activity timeline.
-6. Add or edit a product, then record an IN/OUT stock movement.
-7. Show product filters, status badges, reorder suggestion, and movement ledger.
+1. Login as Admin, show dashboard KPIs.
+2. Open the Walkthrough page, explain roles and business rules.
+3. Click a notification, show it opens the exact record needing attention.
+4. Add/edit a customer, add a follow-up note.
+5. Filter customers by follow-up state, show the customer activity timeline.
+6. Add/edit a product, record an IN/OUT stock movement.
+7. Show product filters, status badges, reorder suggestion, movement ledger.
 8. Create a draft challan with notes and multiple items.
-9. Open challan detail, confirm it, and show stock reduction plus lifecycle timeline.
-10. Use Print / Export PDF from the challan detail view.
-11. Show Admin user management and role-aware read-only behavior.
-12. Open Postman collection or README briefly to show API/documentation readiness.
+9. Open challan detail, confirm it, show stock reduction and the lifecycle timeline.
+10. **Try to confirm/create a challan that exceeds available stock — show it gets rejected with no partial changes.** *(This is the moment worth not skipping — it's the core test of the assignment.)*
+11. Use Print / Export PDF from the challan detail view.
+12. Show Admin user management and role-aware read-only behavior.
+13. Open `/docs`, the Postman collection, or this README briefly to show documentation readiness.
