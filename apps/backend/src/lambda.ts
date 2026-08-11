@@ -1,6 +1,4 @@
-import serverless from "serverless-http";
+import serverlessExpress from "@codegenie/serverless-express";
 import { app } from "./app.js";
 
-export const handler = serverless(app, {
-  binary: ["application/pdf"]
-});
+export const handler = serverlessExpress({ app });
