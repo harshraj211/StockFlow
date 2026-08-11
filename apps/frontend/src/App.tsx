@@ -31,6 +31,7 @@ import {
   X
 } from "lucide-react";
 import { ActivityLog, api, Challan, Customer, DashboardStats, errorMessage, isNetworkError, Product, Role, User } from "./api";
+import warehouseLoginImage from "./login-warehouse.png";
 
 type Tab = "dashboard" | "walkthrough" | "customers" | "products" | "challans" | "activity" | "users";
 type FieldErrors = Record<string, string>;
@@ -440,7 +441,20 @@ export function App() {
     }
     return (
       <main className="login-screen">
-        <section className="login-panel">
+        <section className="login-layout">
+          <aside className="login-visual" style={{ backgroundImage: `url(${warehouseLoginImage})` }}>
+            <div className="login-visual-overlay" />
+            <div className="login-visual-content">
+              <div className="visual-brand"><span className="brand-mark"><Boxes size={22} /></span> StockFlow</div>
+              <div>
+                <p className="eyebrow">Your operational command center</p>
+                <h2>Every order, stock movement, and customer follow-up in view.</h2>
+                <p>Built for teams that need dependable inventory decisions without the spreadsheet scramble.</p>
+              </div>
+              <div className="visual-stat"><span><span className="pulse-dot" /> System ready</span><small>Secure role-based workspace</small></div>
+            </div>
+          </aside>
+          <section className="login-panel">
           <div>
             <button className="back-link" onClick={() => { setPublicView("overview"); setMessage(""); }}><ArrowRight size={15} /> Back to overview</button>
             <p className="eyebrow">StockFlow workspace</p>
@@ -482,6 +496,7 @@ export function App() {
             ))}
           </div>
           {message && <p className="alert">{message}</p>}
+          </section>
         </section>
       </main>
     );
