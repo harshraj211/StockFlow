@@ -1,333 +1,455 @@
-# StockFlow — Mini ERP + CRM Operations Portal
+# StockFlow - Mini ERP and CRM Operations Portal
 
-![Node](https://img.shields.io/badge/Node.js-22-339933?logo=node.js&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-22-3C873A?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
-![Express](https://img.shields.io/badge/Express.js-backend-000000?logo=express&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma_ORM-4169E1?logo=postgresql&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![React](https://img.shields.io/badge/React-19-20232A?logo=react&logoColor=61DAFB)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma-4169E1?logo=postgresql&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20API%20Gateway%20%7C%20S3-232F3E?logo=amazonwebservices&logoColor=white)
 [![Quality Checks](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml)
-![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-A full-stack case study for a wholesale/distribution business — authentication and role-based access, customer CRM with follow-up tracking, product inventory with a real stock movement ledger, and a sales challan engine with atomic, race-safe stock deduction.
+StockFlow is a full-stack operations portal for wholesale and distribution teams. It combines customer relationship management, product inventory, stock movements, sales challans, role-based approvals, reporting, and audit history in one responsive application.
 
----
+The project focuses on the business rule that matters most: confirming a challan must deduct stock exactly once, must never create negative stock, and must leave no partial changes when confirmation fails.
 
-## Live Deployment — Reviewer Links
+## Live AWS Application
 
-These are the production URLs requested for evaluation. The application is available both as the original Vercel/Render deployment and as a complete AWS serverless deployment backed by the same Supabase PostgreSQL database.
-
-| | |
+| Resource | URL |
 |---|---|
-| **Frontend (Vercel)** | [stockflow-finance.vercel.app](https://stockflow-finance.vercel.app) |
-| **Backend API (Render)** | [stockflow-api-x7w3.onrender.com/health](https://stockflow-api-x7w3.onrender.com/health) |
-| **Interactive API Docs (Swagger)** | [stockflow-api-x7w3.onrender.com/docs](https://stockflow-api-x7w3.onrender.com/docs) |
-| **Full AWS Deployment** | [StockFlow on AWS](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com) |
-| **AWS Health / API Docs** | [Health](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/health) / [Swagger](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/docs) |
-| **Test Credentials** | See [Test Credentials](#test-credentials) below — all roles use `Password@123` |
+| **StockFlow application** | [https://3586xchi5e.execute-api.ap-south-1.amazonaws.com](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com) |
+| **Backend health check** | [https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/health](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/health) |
+| **Swagger API documentation** | [https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/docs](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/docs) |
+| **OpenAPI JSON** | [https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/openapi.json](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/openapi.json) |
+| **GitHub Actions** | [Quality checks and AWS deployment](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml) |
 
-The single feature worth testing first: create a sales challan, confirm it, then try another confirmation that would oversell stock. The API **rejects the unsafe confirmation without making partial changes** — the core business rule this case study is built around (see [Design Notes](#design-notes--what-i-learned-building-this) below).
-
----
-
-## Table of Contents
-
-- [Live Deployment](#live-deployment--reviewer-links)
-- [What Makes StockFlow Different](#what-makes-stockflow-different)
-- [Tech Stack](#tech-stack)
-- [Test Credentials](#test-credentials)
-- [Local Setup](#local-setup)
-- [API Reference](#api-endpoints-reference)
-- [Architecture](#architecture--code-design)
-- [Design Notes](#design-notes--what-i-learned-building-this)
-- [Known Limitations](#known-limitations--incomplete-parts)
-- [Deployment](#deployment)
-- [Submission Deliverables](#submission-deliverables)
-
----
-
-## What Makes StockFlow Different
-
-Most submissions for this case study can stop at CRUD. StockFlow adds business-facing reliability and reviewer-friendly product depth:
-
-1. **Actionable Dashboard** — low stock, follow-up, draft challan, revenue, and operational exception signals are visible from the first screen.
-2. **Notification Deep Links** — alerts open the exact customer, product, or challan record that needs attention.
-3. **Audit Thinking** — a global Activity Log, customer activity, inventory movements, and challan lifecycle events are all visible in timeline or ledger format.
-4. **Race-Safe Business Rules** — stock confirmation uses a conditional atomic decrement, not a check-then-write pattern, so concurrent confirms can't oversell (see [Design Notes](#design-notes--what-i-learned-building-this)).
-5. **Professional Document Output** — challan print view includes branding, customer details, item table, totals, notes, and a signature area.
-6. **Role Demonstration** — Admin, Sales, Warehouse, and Accounts accounts show different permission boundaries clearly in both the UI and the API.
-7. **Reviewer-Ready Experience** — a public product overview, focused login flow, responsive operations workspace, and Light/Dark/System themes make every workflow easy to inspect.
-8. **Private Product Media** — product images upload directly to a private AWS S3 bucket through five-minute presigned URLs; the API verifies type and size before attaching them.
-
----
-
-## Tech Stack
-
-- **Backend**: Node.js, TypeScript, Express.js, Prisma ORM, PostgreSQL, JWT, Zod, Helmet, Express Rate Limit
-- **Frontend**: React 19, TypeScript, Vite, CSS (Vanilla Design System)
-- **DevOps**: full-stack Docker Compose, GitHub Actions CI/CD with AWS OIDC, CloudFormation, ECR, environment-based configuration
-- **Hosting**: AWS API Gateway + Lambda container (full app), Vercel (frontend), Render (API), Supabase (PostgreSQL), AWS S3 (private product images)
-
----
-
-## Key Backend Features & Enhancements
-
-- **Reviewer Walkthrough Mode**: in-app guide explaining seeded credentials, demo flow, role boundaries, and business rules for fast evaluation.
-- **JWT Authentication & RBAC**: roles (`ADMIN`, `SALES`, `WAREHOUSE`, `ACCOUNTS`) with granular endpoint protection and account activation control (`isActive`).
-- **Security & Rate Limiting**: rate limiting on `/auth/login` (20 req/15min), a lighter general API limiter, required JWT secret validation, and Helmet HTTP security headers.
-- **Health Check API**: `GET /health` runs a live database ping (`SELECT 1`) and reports required-env readiness.
-- **Swagger/OpenAPI Docs**: `GET /docs` serves interactive API documentation; `GET /openapi.json` exposes the raw contract.
-- **Executive Dashboard KPIs**: `GET /dashboard/stats` returns revenue, active/lead breakdowns, low-stock items, upcoming follow-ups, and recent challans.
-- **Customer CRM Module**: create/read/update workflows, status filtering (`LEAD`, `ACTIVE`, `INACTIVE`), pagination, search, and date-stamped follow-up notes with author attribution.
-- **Product & Inventory Module**: SKU uniqueness enforcement, category/location tracking, stock-level warnings, private AWS S3 product images, and a full IN/OUT stock movement audit log with reason and user attribution.
-- **Sales Challan Engine**: multi-product draft/confirmed creation, retry-safe sequential numbers (`CH-2026-00001`), snapshotting of product details, total amount computation, and atomic guarded stock decrements that never let stock go negative.
-- **Challan Status History**: every lifecycle event stored with from/to status, note, actor, role, and timestamp for full auditability.
-- **Admin User Management**: list, register, adjust roles, activate/deactivate accounts.
-- **Operational UI Polish**: responsive role-aware navigation, hidden unauthorized modules, Light/Dark/System themes, route-based record URLs, notification deep-links, filters, low-stock review, manual stock entry, challan lifecycle timeline, browser print, server-generated PDF, pagination, loading states, and empty states.
-- **Automated Quality Gate and Deployment**: GitHub Actions installs dependencies, generates Prisma Client, runs backend tests, builds both applications, validates both production Docker images, and deploys `main` to AWS through short-lived OIDC credentials.
-- **Backend Test Coverage**: unit tests for login, role denial, negative stock prevention, challan confirmation — plus an optional real-Postgres integration suite (see [Local Setup](#local-setup)).
-
----
+The AWS URL serves both the React frontend and Express API. A reviewer does not need separate frontend and backend links.
 
 ## Test Credentials
 
-All seeded accounts use the password: `Password@123`
+All seeded demonstration accounts use `Password@123`.
 
-| Role | Email | Permissions |
+| Role | Email | Main access |
 |---|---|---|
-| **Admin** | `admin@fundsroom.test` | Full operational access + user management |
-| **Sales** | `sales@fundsroom.test` | Manage customers, follow-up notes, create/edit challans |
-| **Warehouse** | `warehouse@fundsroom.test` | Manage products & execute stock movements |
-| **Accounts** | `accounts@fundsroom.test` | View reports, confirm/cancel challans for billing |
+| **Admin** | `admin@fundsroom.test` | Full access, including internal user management |
+| **Sales** | `sales@fundsroom.test` | Customers, follow-ups, and sales challan creation |
+| **Warehouse** | `warehouse@fundsroom.test` | Products, images, and stock movements |
+| **Accounts** | `accounts@fundsroom.test` | Challan review, confirmation, cancellation, and reports |
 
----
+Navigation is role-aware. Modules a user cannot access are hidden instead of appearing as disabled menu items.
+
+## Reviewer Quick Walkthrough
+
+1. Sign in as **Admin** and inspect the dashboard, notifications, and global search.
+2. Open **Customers** to review priorities, follow-up dates, notes, editing, filtering, pagination, and CSV export.
+3. Open **Inventory**, select a product, upload or replace its image, record an IN/OUT movement, and inspect the audit trail.
+4. Open **Challans**, create a draft with multiple products, then confirm it.
+5. Confirm that product stock is deducted and both the challan timeline and global Activity page record the operation.
+6. Attempt a confirmation with insufficient stock. StockFlow rejects it without making partial updates.
+7. Download the challan PDF and switch between Admin, Sales, Warehouse, and Accounts to inspect permission boundaries.
+
+## Assignment Bonus Features: 4/4 Completed
+
+| Bonus requirement | Status | Implementation |
+|---|---|---|
+| Docker setup | Completed | PostgreSQL, Express, and the Nginx-served React application run through one `docker compose up` command |
+| GitHub Actions deployment | Completed | Tests, builds, Docker validation, Prisma migrations, ECR publishing, CloudFormation deployment, S3 CORS, and production smoke tests |
+| Export invoice as PDF | Completed | The backend generates an A4 sales challan PDF through PDFKit |
+| Upload product image to AWS S3 | Completed | Private S3 objects, direct presigned uploads, verification, replacement, deletion, and short-lived read URLs |
+
+An additional full AWS deployment is also complete using API Gateway, Lambda, ECR, CloudFormation, IAM OIDC, CloudWatch Logs, and S3.
+
+## Major Features
+
+### Dashboard and Operational Control
+
+- Revenue, customer, challan, healthy-stock, low-stock, and out-of-stock KPIs.
+- Low-stock recovery, follow-up queue, and pending confirmation panels.
+- Notifications that deep-link to the customer, product, or challan requiring attention.
+- Role-specific dashboard content and navigation.
+- Global search across customers, products, and challans.
+- Light, dark, and system theme support.
+
+### Customer CRM
+
+- Create, view, and edit customer records.
+- Customer status: Lead, Active, or Inactive.
+- Hot, Warm, and Cold priority tracking.
+- Search, status filters, follow-up filters, pagination, and CSV export.
+- Separate customer detail routes with notes and chronological activity.
+- Follow-up date, note, author, and timestamp tracking.
+- Empty, loading, validation, and error states.
+
+### Product and Inventory Management
+
+- Create, view, and edit products with unique SKUs.
+- Category, warehouse location, unit price, current stock, and minimum stock.
+- Healthy, low-stock, and out-of-stock filtering.
+- Reorder suggestions and dashboard alerts.
+- Manual IN/OUT movements with quantity, reason, author, and timestamp.
+- Full Inventory Audit Trail with stable responsive columns.
+- CSV export and API-backed pagination.
+- Database-level `currentStock >= 0` check constraint.
+
+### Private AWS S3 Product Images
+
+- Admin and Warehouse users can upload, replace, or remove product images from the Inventory page.
+- Images upload directly from the browser to S3 through a five-minute presigned PUT URL.
+- Supported formats are JPEG, PNG, and WebP, with a maximum size of 5 MB.
+- The API verifies the uploaded object's key, content type, and content length before linking it to a product.
+- The S3 bucket remains private with Block Public Access enabled.
+- Product responses contain a one-hour presigned read URL instead of exposing a public object.
+- Lambda receives least-privilege access only to the bucket's `products/*` objects.
+- Replaced and removed images are deleted from S3.
+
+### Sales Challans
+
+- Multi-product Draft or Confirmed challan creation.
+- Retry-safe sequential challan numbers such as `CH-2026-00001`.
+- Product name, SKU, category, location, and price snapshots preserve historical accuracy.
+- Server-computed quantities and totals.
+- Draft notes and a complete status timeline.
+- Confirmation and cancellation controlled by role and current status.
+- Browser print view and server-generated PDF download.
+- CSV export, pagination, search, and status filters.
+
+### Authentication and Administration
+
+- JWT authentication with bcrypt password hashing.
+- Admin, Sales, Warehouse, and Accounts roles.
+- Backend-enforced role authorization for every protected operation.
+- Admin-only user creation, role updates, activation, and soft deactivation.
+- Password complexity validation when accounts are created.
+- Login rate limiting and general API rate limiting.
+- Helmet security headers, controlled CORS, Zod validation, and centralized error handling.
+
+### Auditability and Reporting
+
+- Global activity stream across CRM, inventory, challans, and user administration.
+- Customer follow-up history.
+- Product stock movement ledger.
+- Challan status history with actor, role, note, and timestamp.
+- CSV exports for customers, products, challans, and activity.
+- Structured JSON request logs with method, path, status, response time, and content length.
+
+## Technical Architecture
+
+```mermaid
+flowchart LR
+    Browser[React browser client] --> APIGW[AWS API Gateway HTTP API]
+    APIGW --> Lambda[AWS Lambda container]
+    Lambda --> Frontend[React static application]
+    Lambda --> Express[Express REST API]
+    Express --> Supabase[(Supabase PostgreSQL)]
+    Express --> S3[(Private AWS S3 bucket)]
+    Actions[GitHub Actions] --> ECR[AWS ECR]
+    Actions --> Migrations[Prisma migrations]
+    Actions --> CloudFormation[AWS CloudFormation]
+    ECR --> Lambda
+    CloudFormation --> APIGW
+    CloudFormation --> Lambda
+```
+
+### Production Request Flow
+
+1. API Gateway receives every frontend and API request.
+2. Lambda runs the container image stored in ECR.
+3. Express serves the built React application for browser routes and handles REST endpoints.
+4. Prisma connects to Supabase through transaction pooling, with a bounded connection pool suitable for Lambda.
+5. Product images are uploaded directly to private S3 using presigned URLs.
+6. CloudWatch stores structured Lambda logs with a 14-day retention policy.
+
+### Technology Stack
+
+- **Frontend:** React 19, TypeScript, Vite, React Router, Axios, Lucide icons, custom responsive CSS.
+- **Backend:** Node.js 22, Express 5, TypeScript, Prisma ORM, Zod, JWT, bcrypt, PDFKit, Swagger/OpenAPI.
+- **Database:** PostgreSQL hosted by Supabase, including Prisma migrations and transaction pooling.
+- **AWS:** API Gateway HTTP API, Lambda container, ECR, S3, IAM, CloudFormation, CloudWatch Logs.
+- **DevOps:** pnpm workspace, Docker Compose, GitHub Actions, GitHub OIDC, automated smoke tests.
+- **Testing:** Vitest, Supertest, mocked service tests, and an optional real-PostgreSQL integration suite.
+
+## Reliability and Data Integrity
+
+### Atomic challan confirmation
+
+Challan confirmation executes inside a Prisma transaction. Each product is updated with a conditional atomic decrement:
+
+```ts
+const result = await tx.product.updateMany({
+  where: {
+    id: item.productId,
+    currentStock: { gte: item.quantity }
+  },
+  data: {
+    currentStock: { decrement: item.quantity }
+  }
+});
+
+if (result.count === 0) {
+  throw new HttpError(400, "Insufficient stock");
+}
+```
+
+This avoids a check-then-write race. Concurrent confirmations cannot both pass a stale stock check, and a failure rolls back every deduction, movement, and status change in the transaction.
+
+### Additional safeguards
+
+- A PostgreSQL CHECK constraint prevents `Product.currentStock` from becoming negative.
+- Confirmed challans cannot be edited or cancelled.
+- Draft challan notes and status changes are recorded in history.
+- Sales challan items store snapshots rather than relying on mutable product values.
+- Challan number conflicts are handled through transactional generation and retry.
+- Required environment variables fail fast during application startup.
+- The `/health` endpoint verifies database connectivity and reports S3 configuration readiness.
+
+More detail is available in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+
+## API Reference
+
+`/auth/login`, `/health`, `/docs`, and `/openapi.json` are public. Business endpoints require `Authorization: Bearer <token>`.
+
+### Platform
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Database and environment readiness |
+| `GET` | `/docs` | Interactive Swagger UI |
+| `GET` | `/openapi.json` | OpenAPI 3 specification |
+| `POST` | `/auth/login` | Authenticate and return a JWT |
+| `GET` | `/dashboard/stats` | Operational KPIs and exception queues |
+| `GET` | `/activity` | Paginated global audit stream |
+
+### Customers
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/customers` | Searchable and paginated customer list |
+| `POST` | `/customers` | Create a customer |
+| `GET` | `/customers/:id` | Customer detail and follow-up history |
+| `PUT` | `/customers/:id` | Update a customer |
+| `POST` | `/customers/:id/follow-ups` | Add a follow-up note |
+
+### Products and Inventory
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/products` | Search, filter, and paginate inventory |
+| `POST` | `/products` | Create a product |
+| `GET` | `/products/:id` | Product detail and recent movements |
+| `PUT` | `/products/:id` | Update a product |
+| `GET` | `/products/:id/movements` | Paginated inventory audit trail |
+| `POST` | `/products/:id/movements` | Record an IN/OUT movement |
+| `POST` | `/products/:id/image/upload-url` | Create a five-minute S3 upload URL |
+| `POST` | `/products/:id/image/complete` | Verify and attach the uploaded image |
+| `DELETE` | `/products/:id/image` | Remove the product image from S3 |
+
+### Sales Challans
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/challans` | Searchable and paginated challan list |
+| `POST` | `/challans` | Create a Draft or Confirmed challan |
+| `GET` | `/challans/:id` | Challan detail and lifecycle history |
+| `GET` | `/challans/:id/pdf` | Download the server-generated PDF |
+| `PATCH` | `/challans/:id/notes` | Update notes on a Draft challan |
+| `PATCH` | `/challans/:id/status` | Confirm or cancel a Draft challan |
+
+### Admin Users
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/users` | List internal users |
+| `POST` | `/users` | Create a user |
+| `PUT` | `/users/:id` | Update name or role |
+| `PATCH` | `/users/:id/deactivate` | Soft-deactivate a user |
+| `PATCH` | `/users/:id/activate` | Reactivate a user |
 
 ## Local Setup
 
-### Full Stack with Docker
+### Prerequisites
 
-Run PostgreSQL, the Express API, and the Nginx-served React app together:
+- Node.js 22 or later.
+- pnpm 11.
+- PostgreSQL 16, or Docker for the complete local stack.
+
+### Option 1: Full Stack with Docker
 
 ```bash
 docker compose up --build -d
 docker compose exec backend pnpm --filter backend db:seed
 ```
 
-Open `http://localhost:8080`. The API, health endpoint, and Swagger docs are available on port `4000`. The seed command is only needed the first time a new database volume is created.
+Open the following URLs:
 
-### Manual Development Setup
+| Service | Local URL |
+|---|---|
+| StockFlow frontend | `http://localhost:8080` |
+| Express API | `http://localhost:4000` |
+| Health check | `http://localhost:4000/health` |
+| Swagger UI | `http://localhost:4000/docs` |
 
-### 1. Install Dependencies
+The seed command is needed only when initializing a new PostgreSQL volume.
+
+### Option 2: Manual Development
+
 ```bash
 pnpm install
-```
 
-### 2. Configure Environment Variables
-```bash
+# Create local environment files
 cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env
-```
 
-### 3. Start Database Only (PostgreSQL)
-```bash
+# Start PostgreSQL only through Docker
 docker compose up -d postgres
-```
-*(Alternatively, supply your own PostgreSQL connection string in `apps/backend/.env`)*
 
-### 4. Database Migration & Seeding
-```bash
+# Generate Prisma, apply migrations, and seed demo data
 pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
-```
 
-### 5. Start Development Servers
-```bash
+# Start React and Express in development mode
 pnpm dev
 ```
 
-| Service | URL |
+Local development URLs:
+
+| Service | Local URL |
 |---|---|
-| Frontend App | `http://localhost:5173` |
-| Backend API | `http://localhost:4000` |
-| Health Check | `http://localhost:4000/health` |
-| API Docs (Swagger) | `http://localhost:4000/docs` |
+| React application | `http://localhost:5173` |
+| Express API | `http://localhost:4000` |
+| Health check | `http://localhost:4000/health` |
+| Swagger UI | `http://localhost:4000/docs` |
 | OpenAPI JSON | `http://localhost:4000/openapi.json` |
 
-### 6. Run Tests
+### Environment Variables
+
+Backend variables:
+
+```env
+DATABASE_URL=postgresql://erp_user:erp_password@localhost:5432/mini_erp?schema=public
+JWT_SECRET=replace-with-a-strong-secret
+JWT_EXPIRES_IN=8h
+PORT=4000
+FRONTEND_URL=http://localhost:5173
+AWS_REGION=ap-south-1
+AWS_S3_BUCKET=your-private-product-image-bucket
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+```
+
+Frontend variable:
+
+```env
+VITE_API_URL=http://localhost:4000
+```
+
+When running in AWS, Lambda uses its IAM execution role for S3. Long-lived AWS keys are not required inside the production application.
+
+## Testing and Quality Checks
+
 ```bash
-pnpm --filter backend test
+# Backend API and business-rule tests
+pnpm test
+
+# TypeScript and production builds for both applications
 pnpm build
+
+# Validate Docker Compose
+docker compose config --quiet
 ```
 
-For a real Postgres stock-safety check against a live database rather than a mock:
+To run the real-PostgreSQL stock-safety integration suite:
+
 ```bash
-TEST_DATABASE_URL="postgresql://..." RUN_INTEGRATION_TESTS=true pnpm --filter backend test
+TEST_DATABASE_URL=postgresql://... RUN_INTEGRATION_TESTS=true pnpm --filter backend test
 ```
-The integration suite creates and removes only its own `integration-*` records and will not run without `TEST_DATABASE_URL` set.
 
----
+The integration suite creates records prefixed with `integration-`, verifies insufficient-stock rejection against PostgreSQL, and removes its own data afterward.
 
-## API Endpoints Reference
+## Automated AWS Deployment
 
-Business endpoints require `Authorization: Bearer <token>`. `/auth/login`, `/health`, `/docs`, and `/openapi.json` are public.
+Every push to `main` runs the following GitHub Actions pipeline:
 
-### Auth, Docs & Health
-- `GET  /health` — live database status check
-- `GET  /docs` — interactive Swagger/OpenAPI documentation
-- `GET  /openapi.json` — raw OpenAPI 3.0 contract
-- `POST /auth/login` — authenticate & return JWT (rate-limited)
+1. Install locked pnpm dependencies.
+2. Generate Prisma Client.
+3. Run backend tests.
+4. Build the backend and frontend.
+5. validate Docker Compose and build both production Docker images.
+6. Assume the AWS deployment role through GitHub OIDC.
+7. Build the Lambda container and publish an immutable commit-tagged image to ECR.
+8. Apply Prisma migrations using the direct Supabase database connection.
+9. Deploy API Gateway, Lambda, IAM, and CloudWatch configuration through CloudFormation.
+10. Configure S3 CORS for direct browser uploads.
+11. Smoke-test the AWS root application and `/health` endpoint.
 
-### Executive Dashboard
-- `GET  /dashboard/stats` — consolidated KPIs, revenue, low stock list, upcoming follow-ups
+GitHub stores no long-lived AWS access keys. The workflow exchanges its GitHub OIDC identity for short-lived AWS credentials restricted to this repository and deployment stack.
 
-### Customers (CRM)
-- `GET  /customers` — list (supports `page`, `limit`, `search`)
-- `POST /customers` — create (`ADMIN`, `SALES`)
-- `GET  /customers/:id` — details + follow-up history
-- `PUT  /customers/:id` — update (`ADMIN`, `SALES`)
-- `POST /customers/:id/follow-ups` — append follow-up note (`ADMIN`, `SALES`)
+AWS infrastructure is defined in:
 
-### Activity Log
-- `GET  /activity` — global activity stream (supports `page`, `limit`, `search`)
+- [`infra/aws-bootstrap.yml`](./infra/aws-bootstrap.yml): GitHub OIDC provider, deployment role, and ECR repository.
+- [`infra/aws-app.yml`](./infra/aws-app.yml): Lambda, API Gateway, execution role, environment configuration, and CloudWatch log group.
 
-### Products & Inventory
-- `GET  /products` — list (supports `page`, `limit`, `search`)
-- `POST /products` — add (`ADMIN`, `WAREHOUSE`)
-- `GET  /products/:id` — details + recent stock movements
-- `PUT  /products/:id` — edit (`ADMIN`, `WAREHOUSE`)
-- `GET  /products/:id/movements` — paginated stock movement audit trail
-- `POST /products/:id/movements` — manual IN/OUT adjustment (`ADMIN`, `WAREHOUSE`)
-- `POST /products/:id/image/upload-url` — create a five-minute direct-to-S3 upload URL (`ADMIN`, `WAREHOUSE`)
-- `POST /products/:id/image/complete` — verify and attach an uploaded image (`ADMIN`, `WAREHOUSE`)
-- `DELETE /products/:id/image` — remove the private S3 object (`ADMIN`, `WAREHOUSE`)
+## Project Structure
 
-### Sales Challans
-- `GET   /challans` — list (supports `page`, `limit`, `search`)
-- `POST  /challans` — create, Draft or Confirmed (`ADMIN`, `SALES`)
-- `GET   /challans/:id` — full detail with item snapshots
-- `GET   /challans/:id/pdf` — server-generated challan PDF
-- `PATCH /challans/:id/notes` — update notes on a Draft challan (`ADMIN`, `SALES`)
-- `PATCH /challans/:id/status` — confirm or cancel (`ADMIN`, `SALES`, `ACCOUNTS`)
-
-### User Management (`ADMIN` only)
-- `GET   /users` — list all internal users
-- `POST  /users` — create a user account
-- `PUT   /users/:id` — update name or role
-- `PATCH /users/:id/deactivate` — soft-deactivate
-- `PATCH /users/:id/activate` — re-activate
-
----
+```text
+StockFlow/
+|-- apps/
+|   |-- backend/
+|   |   |-- prisma/              # Schema, migrations, and seed data
+|   |   `-- src/                 # Express API, auth, routes, S3, tests
+|   `-- frontend/
+|       `-- src/                 # React application and design system
+|-- infra/
+|   |-- aws-bootstrap.yml        # OIDC role and ECR
+|   `-- aws-app.yml              # Lambda and API Gateway stack
+|-- postman/                     # Importable Postman collection
+|-- .github/workflows/ci.yml     # Quality gate and AWS deployment
+|-- docker-compose.yml           # PostgreSQL, backend, and frontend
+|-- ARCHITECTURE.md              # Concurrency and architecture decisions
+`-- README.md
+```
 
 ## Postman Collection
 
-A complete, production-ready Postman collection is included at `postman/Mini_ERP_CRM.postman_collection.json`:
-- **Auto-Token Capture** — logging in as any user sets `{{token}}` for all subsequent requests.
-- **Auto-ID Capture** — creating a customer, product, or challan populates `{{customerId}}`, `{{productId}}`, `{{challanId}}`.
-- **Negative & Role Validation Tests** — insufficient-stock errors, invalid credentials, 403s on non-admin actions.
+Import [`postman/Mini_ERP_CRM.postman_collection.json`](./postman/Mini_ERP_CRM.postman_collection.json). It includes:
 
-Interactive documentation is also served live from the backend at `/docs`, with the raw contract at `/openapi.json`.
+- Automatic JWT capture after login.
+- Automatic customer, product, and challan ID capture.
+- Positive and negative business-flow requests.
+- Role-denial and insufficient-stock checks.
 
----
+For production testing, set the collection base URL to:
 
-## Architecture & Code Design
+```text
+https://3586xchi5e.execute-api.ap-south-1.amazonaws.com
+```
 
-Full diagrams and reasoning live in [`ARCHITECTURE.md`](./ARCHITECTURE.md), covering the challan confirmation flow, concurrency handling, and the design tradeoffs behind the atomic stock-decrement approach.
+## Known Scope Boundaries
 
-### Backend (`apps/backend`)
-- `src/app.ts` — Express setup, security middleware (Helmet, rate limiter, CORS), route mounting, central error handling
-- `src/auth.ts` — JWT verification middleware and role-based guards (`requireRoles`)
-- `src/routes/*` — modular REST controllers per domain (Auth, Customers, Products, Challans, Users, Dashboard)
-- `src/validators.ts` — Zod request validation
-- `src/http.ts` — standardized error class and async handler wrapper
-- `prisma/schema.prisma` — data models, enums, indexes, `Decimal(12,2)` precision types
+- Confirmed challans cannot be cancelled or edited. A production return or credit-note flow would reverse stock through a separate auditable document.
+- A product currently belongs to one warehouse location. Per-SKU balances across multiple warehouses are not modeled.
+- Authentication uses a short-lived access JWT without a refresh-token rotation flow.
+- S3 supports product images but not general purchase-order or customer document attachments.
+- The frontend is currently concentrated in `App.tsx`; a larger team would split it into feature-level pages and components.
 
-### Frontend (`apps/frontend`)
-- Walkthrough — reviewer-ready demo guide, credentials, module shortcuts, business-rule highlights
-- Dashboard — revenue KPIs, low-stock alerts, upcoming follow-ups, notification actions, recent challans
-- Customers — add/edit, Hot/Warm/Cold priority, follow-up filters, detail view, notes
-- Products — add/edit, private S3 image upload, status badges, category/location/low-stock filters, reorder suggestion, manual stock movement, audit history
-- Challans — draft/confirmed creation, detail view, lifecycle timeline, notes, confirm/cancel, print, PDF export
-- Activity — global audit stream across CRM, inventory, challans, admin actions
-- Deep Links — real URLs for records (`/customers/:id`, `/products/:id`, `/challans/:id`) with browser history support
-- Lists — API-backed pagination throughout
-- Users — admin-only creation, role updates, activation/deactivation
+## Submission Checklist
 
----
+- [x] GitHub repository
+- [x] Live AWS frontend
+- [x] Live AWS backend API
+- [x] Managed PostgreSQL database on Supabase
+- [x] Seeded Admin, Sales, Warehouse, and Accounts credentials
+- [x] Customer CRM module
+- [x] Product and inventory module
+- [x] Sales challan workflow with safe stock deduction
+- [x] Role-based access control
+- [x] Global and module-level audit trails
+- [x] Swagger/OpenAPI documentation
+- [x] Postman collection
+- [x] Architecture notes
+- [x] Full-stack Docker setup
+- [x] GitHub Actions CI/CD to AWS
+- [x] Server-generated PDF export
+- [x] Private AWS S3 product image upload
 
-## Design Notes — What I Learned Building This
+## License
 
-**Stock deduction is the one part of this system that can't be "mostly correct."** Two design decisions came out of thinking through that:
-
-1. **Challan numbers are generated retry-safe, not just sequentially.** An earlier version counted existing challans and incremented — fine until two challans get created close together and collide on the same number. Fixed by generating inside the same transaction with a retry path on unique-constraint conflicts, rather than trusting a read-then-write outside the transaction boundary.
-2. **Stock deduction uses a conditional atomic update, not check-then-write.** A naive implementation reads `currentStock`, compares it to the requested quantity, then writes the decrement — which is unsafe if two challans confirm against the same product at nearly the same moment; both can pass the check before either commits. The fix updates and checks in one atomic operation (`UPDATE ... WHERE currentStock >= quantity`, then checking the affected row count), so the database itself enforces the invariant instead of application logic racing against itself.
-
-This is also why there's an optional real-Postgres integration test path (see [Local Setup](#local-setup)) — the unit tests mock Prisma and can prove the logic is wired correctly, but only a test against a real database can prove the race condition is actually closed.
-
----
-
-## Known Limitations & Incomplete Parts
-
-Being upfront about scope boundaries and tradeoffs made under the assignment's time constraint:
-
-- **Confirmed challans cannot be cancelled or edited**, only Draft ones. Reversing a confirmed challan (e.g. a customer return) would need a separate credit/return flow, which is out of scope here — this is a deliberate assumption, not an oversight, and is documented in [Key Assumptions](#key-assumptions--business-logic) below.
-- **No multi-warehouse stock allocation.** `location` is stored per product as a single field; the schema doesn't yet support splitting one SKU's stock across multiple warehouses with independent reorder thresholds.
-- **No refresh-token flow.** Auth issues a single JWT on login with a fixed expiry; there's no silent-refresh or long-lived session handling, which a production system would want.
-- **No document attachments.** Product photos are supported through private S3 storage, but scanned purchase orders and other general attachments remain out of scope.
-- **Frontend is a single-file React app (`App.tsx`).** It works and is fully functional, but isn't split into `pages/`/`components/` the way a larger production codebase would be — a conscious tradeoff to prioritize backend business logic within the time available.
-
----
-
-## Key Assumptions & Business Logic
-
-1. **Stock Deduction** — stock is deducted inside a Prisma transaction only when a challan moves to `CONFIRMED`.
-2. **Negative Stock Prevention** — each line item uses a conditional atomic decrement (`currentStock >= requestedQuantity`). If any product can't satisfy the request, the transaction fails with HTTP 400 and nothing is partially committed.
-3. **Data Immutability (Snapshots)** — product details (name, SKU, unit price, category) are snapshotted into `SalesChallanItem` at creation time, preserving historical accuracy even if the product record changes later.
-4. **Draft Cancellation** — challans can only be cancelled from `DRAFT`. Confirmed challans stay confirmed, to keep the audit trail consistent (see [Known Limitations](#known-limitations--incomplete-parts) above for the implication of this).
-
----
-
-## Deployment
-
-- **AWS Full Application**: [StockFlow on API Gateway + Lambda](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com)
-- **AWS Health Check**: [Live health](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/health)
-- **AWS API Documentation**: [Swagger UI](https://3586xchi5e.execute-api.ap-south-1.amazonaws.com/docs)
-- **Frontend**: [StockFlow on Vercel](https://stockflow-finance.vercel.app)
-- **Backend**: [StockFlow API on Render](https://stockflow-api-x7w3.onrender.com/health)
-- **API Documentation**: [Swagger UI](https://stockflow-api-x7w3.onrender.com/docs)
-- **Database**: Supabase managed PostgreSQL
-- **Product Media**: private AWS S3 bucket with Block Public Access and short-lived presigned URLs
-- **Continuous Delivery**: [GitHub Actions quality checks and AWS deployment](https://github.com/harshraj211/StockFlow/actions/workflows/ci.yml)
-
-Every push to `main` must pass tests, application builds, Docker image builds, and Compose validation before deployment. GitHub then assumes a least-privilege AWS role through OIDC, publishes the immutable Lambda image to ECR, applies Prisma migrations, updates the CloudFormation stack, configures S3 CORS, and smoke-tests production. No long-lived AWS access keys are stored in GitHub.
-
-The AWS deployment serves the React application and Express API from one API Gateway URL. Lambda provides scale-to-zero compute, ECR stores immutable application images, Supabase supplies PostgreSQL, and the private S3 bucket stores product images.
-
-The Render free instance may need a short cold start after a period of inactivity. The frontend remains available while the API wakes up.
-
-Deployment configuration:
-1. Provision a Postgres instance (Neon/Supabase/Render).
-2. Deploy `apps/backend` with env vars `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `FRONTEND_URL`, `PORT`, `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`.
-3. Start the backend with `pnpm --filter backend start`; it applies pending Prisma migrations before starting the API.
-4. Seed demo credentials (only if this deployment is for review purposes).
-5. Deploy `apps/frontend` with `VITE_API_URL` pointing at the live backend.
-
-AWS infrastructure is reproducible from [`infra/aws-bootstrap.yml`](./infra/aws-bootstrap.yml) and [`infra/aws-app.yml`](./infra/aws-app.yml). The bootstrap stack creates the ECR repository and GitHub OIDC deployment role; the application stack owns API Gateway, Lambda, its execution role, and retained logs.
-
----
-
-## Submission Deliverables
-
-- ✅ GitHub Repository
-- ✅ Postman Collection — `postman/Mini_ERP_CRM.postman_collection.json`
-- ✅ Swagger/OpenAPI — `/docs` and `/openapi.json`
-- ✅ Architecture Notes — [`ARCHITECTURE.md`](./ARCHITECTURE.md)
-- ✅ Seeded Credentials — Admin, Sales, Warehouse, Accounts (`Password@123`)
-- ✅ README — setup, architecture, API spec, known limitations
-- ✅ Live Frontend — [Vercel](https://stockflow-finance.vercel.app)
-- ✅ Live Backend — [Render](https://stockflow-api-x7w3.onrender.com/health)
-- ✅ Managed PostgreSQL — Supabase
-- ✅ Full-stack Docker — PostgreSQL, Express API, and Nginx/React frontend
-- ✅ GitHub Actions Deployment — test, build, Docker validation, OIDC, ECR, CloudFormation, and production smoke test
-- ✅ AWS Deployment — API Gateway + Lambda container with Supabase PostgreSQL
-- ✅ Export Invoice as PDF — server-generated sales challan PDF
-- ✅ AWS S3 Product Images — private bucket, least-privilege IAM, presigned upload/read URLs
+This project is licensed under the MIT License.
