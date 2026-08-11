@@ -34,7 +34,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   }
 
   try {
-    req.user = jwt.verify(token, config.jwtSecret) as AuthUser;
+    req.user = jwt.verify(token, config.jwtSecret) as unknown as AuthUser;
     return next();
   } catch {
     return next(new HttpError(401, "Invalid or expired token"));
