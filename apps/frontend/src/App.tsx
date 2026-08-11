@@ -334,7 +334,7 @@ export function App() {
       });
       setTeamUsers(user?.role === "ADMIN" ? [{ ...user, isActive: true }] : []);
       setTotals({ customers: 1248, products: 342, challans: 87, activity: demoActivities.length, users: user?.role === "ADMIN" ? 4 : 0 });
-      throw error;
+      setMessage(isNetworkError(error) ? "" : errorMessage(error));
     } finally {
       setDataLoading(false);
     }
@@ -452,9 +452,9 @@ export function App() {
           <section className="workflow-section" id="workflows">
             <div className="section-intro"><p className="eyebrow">Built for the work between order and dispatch</p><h2>One operational picture, across every handoff.</h2></div>
             <div className="workflow-grid">
-              <article><span className="workflow-icon teal"><UsersRound size={21} /></span><h3>Customer follow-through</h3><p>Capture customer context, schedule the next touchpoint, and keep hot leads from going quiet.</p><span className="workflow-link">CRM and follow-ups <ArrowRight size={15} /></span></article>
+              <article><span className="workflow-icon"><UsersRound size={21} /></span><h3>Customer follow-through</h3><p>Capture customer context, schedule the next touchpoint, and keep hot leads from going quiet.</p><span className="workflow-link">CRM and follow-ups <ArrowRight size={15} /></span></article>
               <article><span className="workflow-icon orange"><Boxes size={21} /></span><h3>Inventory with context</h3><p>See availability by SKU and location, record movement reasons, and act before a stockout.</p><span className="workflow-link">Stock control <ArrowRight size={15} /></span></article>
-              <article><span className="workflow-icon blue"><Truck size={21} /></span><h3>Confident challan approval</h3><p>Confirm only when stock is available, deduct it once, and retain a clear approval trail.</p><span className="workflow-link">Sales challans <ArrowRight size={15} /></span></article>
+              <article><span className="workflow-icon"><Truck size={21} /></span><h3>Confident challan approval</h3><p>Confirm only when stock is available, deduct it once, and retain a clear approval trail.</p><span className="workflow-link">Sales challans <ArrowRight size={15} /></span></article>
             </div>
           </section>
 
@@ -569,122 +569,130 @@ export function App() {
       : [])
   ];
 
+  const navigationItems = [
+    { tab: "dashboard" as Tab, label: "Overview", icon: Boxes },
+    { tab: "walkthrough" as Tab, label: "Review guide", icon: Sparkles },
+    { tab: "customers" as Tab, label: "Customers", icon: UsersRound },
+    { tab: "products" as Tab, label: "Inventory", icon: PackagePlus },
+    { tab: "challans" as Tab, label: "Challans", icon: ClipboardList },
+    { tab: "activity" as Tab, label: "Activity", icon: History },
+    { tab: "users" as Tab, label: "Users", icon: UserCog }
+  ].filter((item) => roleTabs[user.role].includes(item.tab));
+  const moduleNavigationItems = navigationItems.filter((item) => item.tab !== "walkthrough");
+  const pageMeta: Record<Tab, { title: string; description: string }> = {
+    dashboard: { title: "Operations", description: `Tuesday, 11 August 2026 · ${user.role} workspace` },
+    walkthrough: { title: "System walkthrough", description: "Reviewer guide to roles, workflows, and reliability controls." },
+    customers: { title: "Customers", description: "CRM records, follow-ups, and commercial context." },
+    products: { title: "Inventory", description: "Stock position, locations, reorder levels, and movement history." },
+    challans: { title: "Challans", description: "Draft, confirm, cancel, and export sales challans." },
+    activity: { title: "Activity", description: "A chronological audit of operational changes." },
+    users: { title: "Users", description: "Team access, roles, and account status." }
+  };
+
   return (
-    <main className={`app-shell ${sidebarCompact ? "sidebar-compact" : ""}`}>
-      <aside className="sidebar">
-        <div className="sidebar-main">
-          <div className="brand">
-            <Boxes size={30} />
-            <div>
-              <h2>StockFlow</h2>
-              <span>Operations Portal</span>
-            </div>
-          </div>
-          <nav>
-            <button className={activeTab === "dashboard" ? "active" : ""} onClick={() => go("dashboard")}><Boxes /> Dashboard</button>
-            {user.role === "ADMIN" && <button className={activeTab === "walkthrough" ? "active" : ""} onClick={() => go("walkthrough")}><Sparkles /> Walkthrough</button>}
-            {can(user, ["ADMIN", "SALES"]) && <button className={activeTab === "customers" ? "active" : ""} onClick={() => go("customers")}><UsersRound /> Customers</button>}
-            {can(user, ["ADMIN", "WAREHOUSE", "ACCOUNTS"]) && <button className={activeTab === "products" ? "active" : ""} onClick={() => go("products")}><PackagePlus /> Inventory</button>}
-            {can(user, ["ADMIN", "SALES", "WAREHOUSE", "ACCOUNTS"]) && <button className={activeTab === "challans" ? "active" : ""} onClick={() => go("challans")}><ClipboardList /> Challans</button>}
-            {can(user, ["ADMIN", "WAREHOUSE", "ACCOUNTS"]) && <button className={activeTab === "activity" ? "active" : ""} onClick={() => go("activity")}><History /> Activity</button>}
-            {user.role === "ADMIN" && <button className={activeTab === "users" ? "active" : ""} onClick={() => go("users")}><UserCog /> Users</button>}
-          </nav>
-        </div>
-        <div className="sidebar-footer">
-          {(can(user, ["ADMIN", "SALES"]) || can(user, ["ADMIN", "WAREHOUSE"])) && (
-            <div className="quick-actions">
-              <span>Quick Actions</span>
-              {can(user, ["ADMIN", "SALES"]) && <button className="ghost" onClick={() => go("challans")}><Plus /> Create Challan</button>}
-              {can(user, ["ADMIN", "WAREHOUSE"]) && <button className="ghost" onClick={() => go("products")}><Warehouse /> Add Stock Movement</button>}
-            </div>
-          )}
-          <div className="role-card">
-            <Warehouse size={18} />
-            <div>
-              <span>Your Role</span>
-              <strong>{user.role}</strong>
-            </div>
-          </div>
-          <button className="ghost" onClick={logout}><LogOut /> Logout</button>
-          <small className="copyright">2026 StockFlow</small>
-        </div>
+    <main className={`app-shell ${sidebarCompact ? "nav-open" : ""}`}>
+      <aside className="app-dock" aria-label="Quick navigation">
+        <button className="dock-brand" onClick={() => go("dashboard")} aria-label="StockFlow overview">SF</button>
+        <nav className="dock-nav">
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                className={activeTab === item.tab ? "active" : ""}
+                key={item.tab}
+                onClick={() => { go(item.tab); setSidebarCompact(false); }}
+                aria-label={item.label}
+                title={item.label}
+              >
+                <Icon size={19} />
+              </button>
+            );
+          })}
+        </nav>
+        <button className="dock-logout" onClick={logout} aria-label="Log out" title="Log out"><LogOut size={19} /></button>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
-          <button className="icon-button" aria-label="Menu" onClick={() => setSidebarCompact((value) => !value)}><Menu /></button>
-          <label className="search">
-            <Search size={18} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customers, products, challans..." />
-            <kbd>Ctrl + K</kbd>
-          </label>
-          <div>
-            <span className="date-chip"><CalendarDays size={16} /> Aug 10, 2026</span>
-          </div>
-          <div className="theme-wrap">
-            <button className="icon-button" aria-label="Change appearance" aria-expanded={themeOpen} onClick={() => setThemeOpen((value) => !value)}>
-              {theme === "dark" ? <Moon size={18} /> : theme === "light" ? <Sun size={18} /> : <Monitor size={18} />}
-            </button>
-            {themeOpen && (
-              <div className="theme-menu">
-                <strong>Appearance</strong>
-                {([
-                  ["light", "Light", Sun],
-                  ["dark", "Dark", Moon],
-                  ["system", "System", Monitor]
-                ] as const).map(([value, label, Icon]) => (
-                  <button className={theme === value ? "selected" : ""} key={value} onClick={() => { setTheme(value); setThemeOpen(false); }}><Icon size={16} /> {label}</button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="notification-wrap">
-            <button className={`icon-button ${notifications.length ? "alert-dot" : ""}`} aria-label="Notifications" onClick={() => setNotificationsOpen((value) => !value)}><Bell /></button>
-            {notificationsOpen && (
-              <div className="notification-panel">
-                <div className="notification-head">
-                  <strong>Notifications</strong>
-                  <button className="link-button" onClick={() => setNotificationsOpen(false)}>Close</button>
+          <button className="icon-button menu-toggle" aria-label="Open navigation" onClick={() => setSidebarCompact((value) => !value)}><Menu /></button>
+          <nav className="module-tabs" aria-label="Workspace modules">
+            {moduleNavigationItems.map((item) => (
+              <button className={activeTab === item.tab ? "active" : ""} key={item.tab} onClick={() => go(item.tab)}>{item.label}</button>
+            ))}
+          </nav>
+          <div className="topbar-tools">
+            <label className="search">
+              <Search size={17} />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search anything..." />
+              <kbd>Ctrl K</kbd>
+            </label>
+            <div className="theme-wrap">
+              <button className="icon-button" aria-label="Change appearance" aria-expanded={themeOpen} onClick={() => setThemeOpen((value) => !value)}>
+                {theme === "dark" ? <Moon size={18} /> : theme === "light" ? <Sun size={18} /> : <Monitor size={18} />}
+              </button>
+              {themeOpen && (
+                <div className="theme-menu">
+                  <strong>Appearance</strong>
+                  {([
+                    ["light", "Light", Sun],
+                    ["dark", "Dark", Moon],
+                    ["system", "System", Monitor]
+                  ] as const).map(([value, label, Icon]) => (
+                    <button className={theme === value ? "selected" : ""} key={value} onClick={() => { setTheme(value); setThemeOpen(false); }}><Icon size={16} /> {label}</button>
+                  ))}
                 </div>
-                {notifications.length === 0 && <p className="muted">No urgent updates right now.</p>}
-                {notifications.map((item) => (
-                  <button
-                    key={item.id}
-                    className={`notification-item ${item.tone}`}
-                    onClick={() => {
-                      go(item.tab, item.recordId ?? undefined);
-                      if (item.tab === "customers") setFocusedCustomerId(item.recordId ?? null);
-                      if (item.tab === "products") setFocusedProductId(item.recordId ?? null);
-                      if (item.tab === "challans") setFocusedChallanId(item.recordId ?? null);
-                      setNotificationsOpen(false);
-                    }}
-                  >
-                    <strong>{item.title}</strong>
-                    <span>{item.body}</span>
-                  </button>
-                ))}
-                {notifications.length > 0 && (
-                  <button className="secondary" onClick={() => setNotificationsOpen(false)}>Mark all read</button>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="user-chip">
-            <span>{user.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
-            <div><strong>{user.name}</strong><small>{user.role}</small></div>
+              )}
+            </div>
+            <div className="notification-wrap">
+              <button className={`icon-button ${notifications.length ? "alert-dot" : ""}`} aria-label="Notifications" onClick={() => setNotificationsOpen((value) => !value)}><Bell /></button>
+              {notificationsOpen && (
+                <div className="notification-panel">
+                  <div className="notification-head">
+                    <strong>Notifications</strong>
+                    <button className="link-button" onClick={() => setNotificationsOpen(false)}>Close</button>
+                  </div>
+                  {notifications.length === 0 && <p className="muted">No urgent updates right now.</p>}
+                  {notifications.map((item) => (
+                    <button
+                      key={item.id}
+                      className={`notification-item ${item.tone}`}
+                      onClick={() => {
+                        go(item.tab, item.recordId ?? undefined);
+                        if (item.tab === "customers") setFocusedCustomerId(item.recordId ?? null);
+                        if (item.tab === "products") setFocusedProductId(item.recordId ?? null);
+                        if (item.tab === "challans") setFocusedChallanId(item.recordId ?? null);
+                        setNotificationsOpen(false);
+                      }}
+                    >
+                      <strong>{item.title}</strong>
+                      <span>{item.body}</span>
+                    </button>
+                  ))}
+                  {notifications.length > 0 && <button className="secondary" onClick={() => setNotificationsOpen(false)}>Mark all read</button>}
+                </div>
+              )}
+            </div>
+            <div className="user-chip" title={`${user.name} · ${user.role}`}>
+              <span>{user.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
+              <div><strong>{user.name}</strong><small>{user.role}</small></div>
+            </div>
           </div>
         </header>
         <div className="page-title">
           <div>
-            <h1>{activeTab === "products" ? "Inventory" : activeTab === "walkthrough" ? "System Walkthrough" : activeTab === "activity" ? "Activity Log" : activeTab[0].toUpperCase() + activeTab.slice(1)}</h1>
-            <p className="muted">Track stock, customer follow-ups, challans, and operational exceptions.</p>
+            <h1>{pageMeta[activeTab].title}</h1>
+            <p className="muted">{pageMeta[activeTab].description}</p>
           </div>
-          <button className="secondary" disabled={dataLoading} onClick={() => loadData()}><RefreshCw size={16} /> {dataLoading ? "Refreshing..." : "Refresh"}</button>
+          <div className="page-actions">
+            <button className="secondary icon-only" aria-label="Refresh data" title="Refresh data" disabled={dataLoading} onClick={() => loadData()}><RefreshCw size={16} /></button>
+            {activeTab === "dashboard" && can(user, ["ADMIN", "SALES"]) && <button onClick={() => navigate("/challans?create=1")}><ClipboardList size={16} /> New challan</button>}
+          </div>
         </div>
         {message && <p className="alert">{message}</p>}
 
         {activeTab === "dashboard" && (
           <DashboardView
+            user={user}
             stats={dashboardStats}
             customers={customers.length}
             products={products.length}
@@ -929,7 +937,168 @@ function Pagination({ page, total, setPage }: { page: number; total: number; set
   );
 }
 
-function DashboardView({ stats, customers, products, allProducts, lowStock, draftChallans, onNavigate, onOpenCustomer, onOpenProduct, onOpenChallan, onReviewLowStock, onReviewDraftChallans, onReviewFollowUps, period, setPeriod, loading }: { stats: DashboardStats | null; customers: number; products: number; allProducts: Product[]; lowStock: number; draftChallans: number; onNavigate: (tab: Tab) => void; onOpenCustomer: (id: string) => void; onOpenProduct: (id: string) => void; onOpenChallan: (id: string) => void; onReviewLowStock: () => void; onReviewDraftChallans: () => void; onReviewFollowUps: () => void; period: "today" | "week" | "month"; setPeriod: (period: "today" | "week" | "month") => void; loading: boolean }) {
+function DashboardView({ user, stats, customers, products, allProducts, lowStock, draftChallans, onNavigate, onOpenCustomer, onOpenProduct, onOpenChallan, onReviewLowStock, onReviewDraftChallans, onReviewFollowUps, period, setPeriod, loading }: { user: User; stats: DashboardStats | null; customers: number; products: number; allProducts: Product[]; lowStock: number; draftChallans: number; onNavigate: (tab: Tab) => void; onOpenCustomer: (id: string) => void; onOpenProduct: (id: string) => void; onOpenChallan: (id: string) => void; onReviewLowStock: () => void; onReviewDraftChallans: () => void; onReviewFollowUps: () => void; period: "today" | "week" | "month"; setPeriod: (period: "today" | "week" | "month") => void; loading: boolean }) {
+  const productStats = stats?.products ?? { total: products, healthyStock: Math.max(products - lowStock, 0), lowStock, outOfStock: 0 };
+  const challanStats = stats?.challans ?? { total: 0, draft: draftChallans, confirmed: 0, cancelled: 0 };
+  const lowStockItems = stats?.lowStockList ?? [];
+  const recentChallans = stats?.recentChallans ?? [];
+  const upcomingFollowUps = stats?.upcomingFollowUps ?? [];
+  const canSeeInventory = can(user, ["ADMIN", "WAREHOUSE", "ACCOUNTS"]);
+  const canSeeCustomers = can(user, ["ADMIN", "SALES"]);
+  const canSeeRevenue = can(user, ["ADMIN", "SALES", "ACCOUNTS"]);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const selectedProduct = lowStockItems.find((product) => product.id === selectedProductId)
+    ?? (lowStockItems[0] ? allProducts.find((product) => product.id === lowStockItems[0].id) ?? lowStockItems[0] : null);
+  const projectedShortage = selectedProduct ? Math.max(selectedProduct.minimumStock * 2 - selectedProduct.currentStock, 0) : 0;
+  const selectedProductChallans = selectedProduct
+    ? recentChallans.filter((challan) => challan.items.some((item) => item.sku === selectedProduct.sku)).slice(0, 2)
+    : [];
+  const draftItems = recentChallans.filter((challan) => challan.status === "DRAFT").slice(0, 1);
+  const movementRows = recentChallans.flatMap((challan) => challan.items.map((item) => ({
+    id: `${challan.id}-${item.id}`,
+    challanId: challan.id,
+    time: new Date(challan.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
+    product: item.productName,
+    sku: item.sku,
+    movement: challan.status === "CONFIRMED" ? "Sales issue" : "Reserved",
+    quantity: challan.status === "CONFIRMED" ? -item.quantity : item.quantity,
+    reference: challan.challanNumber
+  }))).slice(0, 4);
+
+  return (
+    <section className={`operations-workbench ${canSeeInventory ? "" : "without-inspector"}`}>
+      <div className="command-rail" aria-label="Operational summary">
+        {canSeeRevenue && <><div><CircleDollarSign size={18} /><strong>{formatMoney(stats?.revenue.confirmedTotal)}</strong><span>confirmed revenue</span></div><span className="command-divider" /></>}
+        {canSeeInventory && <><button onClick={onReviewLowStock}><AlertTriangle size={18} /><strong>{productStats.lowStock}</strong><span>low-stock SKUs</span></button><span className="command-divider" /></>}
+        {canSeeCustomers && <><button onClick={onReviewFollowUps}><UsersRound size={18} /><strong>{upcomingFollowUps.length}</strong><span>follow-ups due</span></button><span className="command-divider" /></>}
+        <button onClick={onReviewDraftChallans}><ClipboardList size={18} /><strong>{challanStats.draft}</strong><span>drafts awaiting approval</span></button>
+        <select aria-label="Reporting period" value={period} onChange={(event) => setPeriod(event.target.value as "today" | "week" | "month")}>
+          <option value="today">Today</option>
+          <option value="week">This week</option>
+          <option value="month">This month</option>
+        </select>
+      </div>
+
+      <div className="workbench-grid">
+        <div className="workbench-main">
+          <section className="ledger-section">
+            <div className="section-heading">
+              <div><h2>Exceptions requiring action</h2><p className="muted">Prioritized across inventory, CRM, and challans.</p></div>
+              <button className="secondary" onClick={() => onNavigate("activity")}>View all activity <ArrowRight size={15} /></button>
+            </div>
+            {loading ? <SkeletonRows count={5} /> : (
+              <div className="table-wrap exception-table-wrap">
+                <table className="data-table exception-table">
+                  <thead><tr><th>Type</th><th>Record</th><th>Details</th><th>Age</th><th>Owner</th><th>Next step</th></tr></thead>
+                  <tbody>
+                    {canSeeInventory && lowStockItems.slice(0, 2).map((product) => (
+                      <tr className={selectedProduct?.id === product.id ? "selected" : ""} key={product.id}>
+                        <td><StatusBadge label={product.currentStock === 0 ? "Stockout" : "Low stock"} tone={product.currentStock === 0 ? "danger" : "warning"} /></td>
+                        <td><button className="record-button" onClick={() => setSelectedProductId(product.id)}><strong>{product.name}</strong><span className="sku">{product.sku}</span></button></td>
+                        <td><span>Current stock {product.currentStock}</span><small>Reorder level {product.minimumStock}</small></td>
+                        <td className={product.currentStock === 0 ? "danger" : "warning"}>{product.currentStock === 0 ? "Now" : "Today"}</td>
+                        <td>Warehouse</td>
+                        <td><button className="table-action" onClick={() => onOpenProduct(product.id)}>Review inventory <ArrowRight size={14} /></button></td>
+                      </tr>
+                    ))}
+                    {canSeeCustomers && upcomingFollowUps.slice(0, 2).map((customer) => (
+                      <tr key={customer.id}>
+                        <td><StatusBadge label="Follow-up" tone={customer.priority === "HOT" ? "danger" : "warning"} /></td>
+                        <td><button className="record-button" onClick={() => onOpenCustomer(customer.id)}><strong>{customer.businessName}</strong><span>{customer.mobile}</span></button></td>
+                        <td><span>Customer contact due</span><small>{customer.priority.toLowerCase()} priority lead</small></td>
+                        <td>Today</td>
+                        <td>Sales</td>
+                        <td><button className="table-action" onClick={() => onOpenCustomer(customer.id)}>Contact customer <ArrowRight size={14} /></button></td>
+                      </tr>
+                    ))}
+                    {draftItems.map((challan) => (
+                      <tr key={challan.id}>
+                        <td><StatusBadge label="Draft challan" tone="danger" /></td>
+                        <td><button className="record-button" onClick={() => onOpenChallan(challan.id)}><strong>{challan.challanNumber}</strong><span>{challan.customer.businessName}</span></button></td>
+                        <td><span>{challan.totalQuantity} items</span><small>{formatMoney(challan.totalAmount)}</small></td>
+                        <td>Today</td>
+                        <td>Sales</td>
+                        <td><button className="table-action" onClick={() => onOpenChallan(challan.id)}>Review and submit <ArrowRight size={14} /></button></td>
+                      </tr>
+                    ))}
+                    {(!canSeeInventory || lowStockItems.length === 0) && (!canSeeCustomers || upcomingFollowUps.length === 0) && draftItems.length === 0 && (
+                      <tr><td colSpan={6}><EmptyState title="No exceptions" body="There is nothing urgent in the current reporting window." /></td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {canSeeInventory && <section className="ledger-section movement-ledger">
+            <div className="section-heading">
+              <div><h2>Recent movement</h2><p className="muted">Latest stock-impacting challan activity.</p></div>
+              <button className="link-button" onClick={() => onNavigate("activity")}>View ledger <ArrowRight size={14} /></button>
+            </div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead><tr><th>Time</th><th>SKU</th><th>Movement</th><th>Qty</th><th>Reference</th></tr></thead>
+                <tbody>
+                  {movementRows.map((movement) => (
+                    <tr key={movement.id}>
+                      <td>{movement.time}</td>
+                      <td><strong>{movement.product}</strong><small className="sku">{movement.sku}</small></td>
+                      <td>{movement.movement}</td>
+                      <td className={`qty ${movement.quantity < 0 ? "danger" : ""}`}>{movement.quantity > 0 ? "+" : ""}{movement.quantity}</td>
+                      <td><button className="table-action" onClick={() => onOpenChallan(movement.challanId)}>{movement.reference}</button></td>
+                    </tr>
+                  ))}
+                  {movementRows.length === 0 && <tr><td colSpan={5}><EmptyState title="No recent movement" body="Confirmed challans will appear in this ledger." /></td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>}
+        </div>
+
+        {canSeeInventory && <aside className="inspection-panel">
+          <div className="inspection-header">
+            <span>Exception detail</span>
+            <button className="icon-button" aria-label="Open inventory queue" title="Open inventory queue" onClick={onReviewLowStock}><X size={16} /></button>
+          </div>
+          {selectedProduct ? (
+            <>
+              <div className="inspection-title">
+                <StatusBadge label={selectedProduct.currentStock === 0 ? "Stockout" : "Low stock"} tone={selectedProduct.currentStock === 0 ? "danger" : "warning"} />
+                <h2>{selectedProduct.name}</h2>
+                <span className="sku">{selectedProduct.sku}</span>
+              </div>
+              <div className="inspection-definition">
+                <InfoRow label="Current stock" value={String(selectedProduct.currentStock)} danger />
+                <InfoRow label="Reorder level" value={String(selectedProduct.minimumStock)} />
+                <InfoRow label="Suggested replenishment" value={`${projectedShortage} units`} danger={projectedShortage > 0} />
+                <InfoRow label="Warehouse" value={selectedProduct.location} />
+                <InfoRow label="Category" value={selectedProduct.category} />
+                <InfoRow label="Unit price" value={formatMoney(selectedProduct.unitPrice)} />
+              </div>
+              <div className="stock-position">
+                <div><h3>Stock position</h3><span>{selectedProduct.currentStock} of {Math.max(selectedProduct.minimumStock * 2, 1)} target units</span></div>
+                <meter min="0" max={Math.max(selectedProduct.minimumStock * 2, 1)} low={selectedProduct.minimumStock} value={selectedProduct.currentStock}>{selectedProduct.currentStock}</meter>
+              </div>
+              <div className="inspection-related">
+                <h3>Related challan</h3>
+                {selectedProductChallans.length ? selectedProductChallans.map((challan) => (
+                  <button className="related-record" key={challan.id} onClick={() => onOpenChallan(challan.id)}>
+                    <span><strong>{challan.challanNumber}</strong><small>{challan.customer.businessName}</small></span>
+                    <ArrowRight size={15} />
+                  </button>
+                )) : <p className="muted">No recent challan references this SKU.</p>}
+              </div>
+              <button onClick={() => onOpenProduct(selectedProduct.id)}><ClipboardList size={16} /> Open item in inventory</button>
+              <button className="secondary" onClick={onReviewLowStock}>View low-stock queue</button>
+            </>
+          ) : <EmptyState title="No inventory exception" body="Low-stock details will appear here when attention is required." />}
+        </aside>}
+      </div>
+    </section>
+  );
+}
+
+function LegacyDashboardView({ stats, customers, products, allProducts, lowStock, draftChallans, onNavigate, onOpenCustomer, onOpenProduct, onOpenChallan, onReviewLowStock, onReviewDraftChallans, onReviewFollowUps, period, setPeriod, loading }: { stats: DashboardStats | null; customers: number; products: number; allProducts: Product[]; lowStock: number; draftChallans: number; onNavigate: (tab: Tab) => void; onOpenCustomer: (id: string) => void; onOpenProduct: (id: string) => void; onOpenChallan: (id: string) => void; onReviewLowStock: () => void; onReviewDraftChallans: () => void; onReviewFollowUps: () => void; period: "today" | "week" | "month"; setPeriod: (period: "today" | "week" | "month") => void; loading: boolean }) {
   const customerStats = stats?.customers ?? { total: customers, active: 0, leads: 0, inactive: 0 };
   const productStats = stats?.products ?? { total: products, healthyStock: Math.max(products - lowStock, 0), lowStock, outOfStock: 0 };
   const challanStats = stats?.challans ?? { total: 0, draft: draftChallans, confirmed: 0, cancelled: 0 };
@@ -1175,6 +1344,7 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
   const [noteErrors, setNoteErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
   const [addingNote, setAddingNote] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
 
   useEffect(() => {
     if (!focusedId) return;
@@ -1188,6 +1358,7 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
   }, [focusedId, customers]);
 
   function beginEdit(customer: Customer) {
+    setFormOpen(true);
     setEditingId(customer.id);
     setForm({
       name: customer.name,
@@ -1205,6 +1376,7 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
   }
 
   function resetForm() {
+    setFormOpen(false);
     setEditingId(null);
     setForm(blankCustomer);
   }
@@ -1310,8 +1482,8 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
   const accountHealthLabel = selected?.status === "LEAD" ? "Lead Opportunity" : selected?.status === "ACTIVE" ? "Active Account" : "Dormant Account";
 
   return (
-    <section className="two-column">
-      {can(user, ["ADMIN", "SALES"]) && (
+    <section className={`two-column ${formOpen ? "" : "list-only"}`}>
+      {can(user, ["ADMIN", "SALES"]) && formOpen && (
         <form className="panel" onSubmit={save}>
           <h2><UserRoundPlus /> {editingId ? "Edit Customer" : "Add Customer"}</h2>
           <input placeholder="Customer name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -1344,7 +1516,7 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
           <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           <div className="actions">
             <button disabled={saving}>{saving ? editingId ? "Updating..." : "Saving..." : editingId ? "Update Customer" : "Save Customer"}</button>
-            {editingId && <button type="button" className="secondary" onClick={resetForm}>Cancel Edit</button>}
+            <button type="button" className="secondary" onClick={resetForm}>Cancel</button>
           </div>
         </form>
       )}
@@ -1357,11 +1529,14 @@ function CustomersView({ user, customers, page, total, setPage, reload, setMessa
       <div className="panel list">
         <div className="panel-toolbar">
           <h2>Customer Records</h2>
-          <button className="secondary" onClick={() => exportCsv(
-            "stockflow-customers.csv",
-            ["Business", "Name", "Mobile", "Email", "Type", "Priority", "Status", "Follow Up"],
-            filteredCustomers.map((customer) => [customer.businessName, customer.name, customer.mobile, customer.email, customer.type, customer.priority, customer.status, customer.followUpDate ? new Date(customer.followUpDate).toLocaleDateString() : ""])
-          )}>Export CSV</button>
+          <div className="actions compact-actions">
+            {can(user, ["ADMIN", "SALES"]) && <button onClick={() => { resetForm(); setFormOpen(true); }}><UserRoundPlus size={15} /> Add customer</button>}
+            <button className="secondary" onClick={() => exportCsv(
+              "stockflow-customers.csv",
+              ["Business", "Name", "Mobile", "Email", "Type", "Priority", "Status", "Follow Up"],
+              filteredCustomers.map((customer) => [customer.businessName, customer.name, customer.mobile, customer.email, customer.type, customer.priority, customer.status, customer.followUpDate ? new Date(customer.followUpDate).toLocaleDateString() : ""])
+            )}>Export CSV</button>
+          </div>
         </div>
         <div className="filter-bar">
           {(["ALL", "TODAY", "WEEK", "OVERDUE", "LEADS"] as const).map((filter) => (
@@ -1548,6 +1723,7 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
   const [movementErrors, setMovementErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
   const [recordingMovement, setRecordingMovement] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
 
   const categories = Array.from(new Set(products.map((product) => product.category))).sort();
   const locations = Array.from(new Set(products.map((product) => product.location))).sort();
@@ -1564,11 +1740,13 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
   }, [focusedId, products]);
 
   function resetForm() {
+    setFormOpen(false);
     setEditingId(null);
     setForm(blankProduct);
   }
 
   function beginEdit(product: Product) {
+    setFormOpen(true);
     setEditingId(product.id);
     setForm({
       name: product.name,
@@ -1663,8 +1841,8 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
   const filteredProducts = products;
 
   return (
-    <section className="two-column">
-      {can(user, ["ADMIN", "WAREHOUSE"]) && (
+    <section className={`two-column ${formOpen ? "" : "list-only"}`}>
+      {can(user, ["ADMIN", "WAREHOUSE"]) && formOpen && (
         <form className="panel" onSubmit={save}>
           <h2><PackagePlus /> {editingId ? "Edit Product" : "Add Product"}</h2>
           {Object.keys(blankProduct).map((key) => (
@@ -1675,7 +1853,7 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
           ))}
           <div className="actions">
             <button disabled={saving}>{saving ? editingId ? "Updating..." : "Saving..." : editingId ? "Update Product" : "Save Product"}</button>
-            {editingId && <button type="button" className="secondary" onClick={resetForm}>Cancel Edit</button>}
+            <button type="button" className="secondary" onClick={resetForm}>Cancel</button>
           </div>
         </form>
       )}
@@ -1688,11 +1866,14 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
       <div className="panel list">
         <div className="panel-toolbar">
           <h2>Inventory</h2>
-          <button className="secondary" onClick={() => exportCsv(
-            "stockflow-products.csv",
-            ["SKU", "Name", "Category", "Location", "Unit Price", "Current Stock", "Minimum Stock", "Status"],
-            filteredProducts.map((product) => [product.sku, product.name, product.category, product.location, product.unitPrice, product.currentStock, product.minimumStock, stockLabel(product)])
-          )}>Export CSV</button>
+          <div className="actions compact-actions">
+            {can(user, ["ADMIN", "WAREHOUSE"]) && <button onClick={() => { resetForm(); setFormOpen(true); }}><PackagePlus size={15} /> Add product</button>}
+            <button className="secondary" onClick={() => exportCsv(
+              "stockflow-products.csv",
+              ["SKU", "Name", "Category", "Location", "Unit Price", "Current Stock", "Minimum Stock", "Status"],
+              filteredProducts.map((product) => [product.sku, product.name, product.category, product.location, product.unitPrice, product.currentStock, product.minimumStock, stockLabel(product)])
+            )}>Export CSV</button>
+          </div>
         </div>
         <div className="filter-grid">
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
@@ -1787,6 +1968,8 @@ function ProductsView({ user, products, page, total, setPage, reload, setMessage
 }
 
 function ChallansView({ user, customers, products, challans, page, total, setPage, reload, setMessage, loading, challanFilter, setChallanFilter, focusedId, clearFocusedId, onOpen, onBack }: { user: User; customers: Customer[]; products: Product[]; challans: Challan[]; page: number; total: number; setPage: (page: number) => void; reload: () => Promise<void>; setMessage: (value: string) => void; loading: boolean; challanFilter: "ALL" | Challan["status"]; setChallanFilter: (value: "ALL" | Challan["status"]) => void; focusedId: string | null; clearFocusedId: () => void; onOpen: (id: string) => void; onBack: () => void }) {
+  const challanLocation = useLocation();
+  const challanNavigate = useNavigate();
   const [customerId, setCustomerId] = useState("");
   const [status, setStatus] = useState<"DRAFT" | "CONFIRMED">("DRAFT");
   const [notes, setNotes] = useState("");
@@ -1799,6 +1982,8 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   const [savingNotes, setSavingNotes] = useState(false);
   const [pdfDownloading, setPdfDownloading] = useState(false);
+  const createRequested = new URLSearchParams(challanLocation.search).get("create") === "1";
+  const [formOpen, setFormOpen] = useState(createRequested);
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const draftTotal = lines.reduce((sum, line) => {
     const product = productMap.get(line.productId);
@@ -1810,6 +1995,10 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
     openDetail(focusedId);
     clearFocusedId();
   }, [focusedId]);
+
+  useEffect(() => {
+    if (createRequested) setFormOpen(true);
+  }, [createRequested]);
 
   const filteredChallans = challans;
 
@@ -1831,6 +2020,8 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
       setCustomerId("");
       setNotes("");
       setErrors({});
+      setFormOpen(false);
+      challanNavigate("/challans", { replace: true });
       setMessage("Challan saved");
       await reload();
     } catch (error) {
@@ -1906,9 +2097,9 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
             * { box-sizing: border-box; }
             body { font-family: Arial, sans-serif; color: #172033; padding: 32px; }
             h1, h2, p { margin-top: 0; }
-            .header { align-items: flex-start; border-bottom: 3px solid #00877d; display: flex; justify-content: space-between; padding-bottom: 18px; }
+            .header { align-items: flex-start; border-bottom: 3px solid #9b2c2c; display: flex; justify-content: space-between; padding-bottom: 18px; }
             .brand { font-size: 28px; font-weight: 800; }
-            .brand span { color: #00877d; }
+            .brand span { color: #9b2c2c; }
             .doc-title { text-align: right; }
             .status { border: 1px solid #d7dde8; border-radius: 999px; display: inline-block; font-size: 12px; font-weight: 800; margin-top: 6px; padding: 6px 10px; }
             table { border-collapse: collapse; width: 100%; margin-top: 24px; }
@@ -1982,8 +2173,8 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
   }
 
   return (
-    <section className="two-column">
-      {can(user, ["ADMIN", "SALES"]) && (
+    <section className={`two-column ${formOpen ? "" : "list-only"}`}>
+      {can(user, ["ADMIN", "SALES"]) && formOpen && (
         <form className="panel" onSubmit={save}>
           <h2><ClipboardList /> Create Challan</h2>
           <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
@@ -2008,7 +2199,10 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
             <option value="DRAFT">Draft</option>
             <option value="CONFIRMED">Confirmed</option>
           </select>
-          <button disabled={saving}>{saving ? "Saving..." : "Save Challan"}</button>
+          <div className="actions">
+            <button disabled={saving}>{saving ? "Saving..." : "Save Challan"}</button>
+            <button type="button" className="secondary" onClick={() => { setFormOpen(false); challanNavigate("/challans", { replace: true }); }}>Cancel</button>
+          </div>
         </form>
       )}
       {!can(user, ["ADMIN", "SALES"]) && (
@@ -2020,11 +2214,14 @@ function ChallansView({ user, customers, products, challans, page, total, setPag
       <div className="panel list">
         <div className="panel-toolbar">
           <h2>Sales Challans</h2>
-          <button className="secondary" onClick={() => exportCsv(
-            "stockflow-challans.csv",
-            ["Challan", "Customer", "Status", "Quantity", "Amount", "Created"],
-            filteredChallans.map((challan) => [challan.challanNumber, challan.customer.businessName, challan.status, challan.totalQuantity, challan.totalAmount, new Date(challan.createdAt).toLocaleString()])
-          )}>Export CSV</button>
+          <div className="actions compact-actions">
+            {can(user, ["ADMIN", "SALES"]) && <button onClick={() => setFormOpen(true)}><ClipboardList size={15} /> New challan</button>}
+            <button className="secondary" onClick={() => exportCsv(
+              "stockflow-challans.csv",
+              ["Challan", "Customer", "Status", "Quantity", "Amount", "Created"],
+              filteredChallans.map((challan) => [challan.challanNumber, challan.customer.businessName, challan.status, challan.totalQuantity, challan.totalAmount, new Date(challan.createdAt).toLocaleString()])
+            )}>Export CSV</button>
+          </div>
         </div>
         <div className="filter-bar">
           <select value={challanFilter} onChange={(event) => setChallanFilter(event.target.value as "ALL" | Challan["status"])}>
@@ -2195,6 +2392,7 @@ function UsersView({ currentUser, users, page, total, setPage, reload, setMessag
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -2210,6 +2408,7 @@ function UsersView({ currentUser, users, page, total, setPage, reload, setMessag
       await api.post("/users", form);
       setForm(blankUser);
       setErrors({});
+      setFormOpen(false);
       setMessage("User created");
       await reload();
     } catch (error) {
@@ -2246,8 +2445,8 @@ function UsersView({ currentUser, users, page, total, setPage, reload, setMessag
   }
 
   return (
-    <section className="two-column">
-      <form className="panel" onSubmit={save}>
+    <section className={`two-column ${formOpen ? "" : "list-only"}`}>
+      {formOpen && <form className="panel" onSubmit={save}>
         <h2><UserCog /> Add Team User</h2>
         <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         <FieldError message={errors.name} />
@@ -2261,11 +2460,17 @@ function UsersView({ currentUser, users, page, total, setPage, reload, setMessag
           <option value="WAREHOUSE">Warehouse</option>
           <option value="ACCOUNTS">Accounts</option>
         </select>
-        <button disabled={saving}>{saving ? "Creating..." : "Create User"}</button>
-      </form>
+        <div className="actions">
+          <button disabled={saving}>{saving ? "Creating..." : "Create User"}</button>
+          <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancel</button>
+        </div>
+      </form>}
 
       <div className="panel list">
-        <h2>Team Access</h2>
+        <div className="panel-toolbar">
+          <h2>Team Access</h2>
+          <button onClick={() => setFormOpen(true)}><UserRoundPlus size={15} /> Add user</button>
+        </div>
         {loading && <SkeletonRows />}
         {!loading && users.map((teamUser) => (
           <article className="row user-row" key={teamUser.id}>
