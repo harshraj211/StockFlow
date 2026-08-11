@@ -15,5 +15,13 @@
   "devDependencies": {
     "typescript": "^5.9.2"
   },
-  "packageManager": "pnpm@11.16.0"
+  "packageManager": "pnpm@11.16.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
+  }
 }
