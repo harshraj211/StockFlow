@@ -10,7 +10,10 @@ export const openApiSpec = swaggerJSDoc({
         "JWT-secured APIs for CRM, inventory, sales challans, dashboard KPIs, activity logs, and admin users."
     },
     servers: [
-      { url: "https://stockflow-api-x7w3.onrender.com", description: "Production API" },
+      {
+        url: "https://3586xchi5e.execute-api.ap-south-1.amazonaws.com",
+        description: "AWS Production API"
+      },
       { url: "http://localhost:4000", description: "Local API" }
     ],
     components: {
