@@ -16,7 +16,8 @@ const prismaMock = {
   },
   salesChallan: {
     count: vi.fn(),
-    findFirst: vi.fn()
+    findFirst: vi.fn(),
+    findUnique: vi.fn()
   },
   customer: {
     count: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock("../../db.js", () => ({ prisma: prismaMock }));
 vi.mock("../../s3.js", () => s3Mock);
 
 const { app } = await import("../../app.js");
+const { handler } = await import("../../lambda.js");
 
 function token(role = "ADMIN") {
   return jwt.sign(
@@ -251,5 +253,92 @@ describe("core API behavior", () => {
       }
     });
     expect(challanUpdate).toHaveBeenCalled();
+  });
+
+  it("returns PDFs as base64-encoded binary responses from Lambda", async () => {
+    prismaMock.salesChallan.findUnique.mockResolvedValue({
+      id: "challan-1",
+      challanNumber: "CH-2026-00001",
+      status: "CONFIRMED",
+      totalQuantity: 2,
+      totalAmount: 500,
+      createdAt: new Date("2026-08-11T05:06:50.000Z"),
+      confirmedAt: new Date("2026-08-11T05:07:00.000Z"),
+      notes: "Deliver to Aaditya Vashisth",
+      customer: {
+        businessName: "Vashisth Electricals Pvt Ltd",
+        name: "Aaditya Vashisth",
+        mobile: "9876543210",
+        address: "New Delhi"
+      },
+      items: [
+        {
+          productName: "PVC Conduit Pipe 25mm",
+          sku: "SKU-PVC-25",
+          category: "Conduit",
+          location: "Delhi Warehouse",
+          quantity: 2,
+          unitPrice: 250
+        }
+      ],
+      createdBy: { name: "Accounts User", role: "ACCOUNTS" }
+    });
+
+    const result = (await handler(
+      {
+        version: "2.0",
+        routeKey: "$default",
+        rawPath: "/challans/challan-1/pdf",
+        rawQueryString: "",
+        headers: {
+          authorization: `Bearer ${token("ACCOUNTS")}`,
+          host: "stockflow.test",
+          "x-forwarded-proto": "https"
+        },
+        requestContext: {
+          accountId: "test",
+          apiId: "test",
+          domainName: "stockflow.test",
+          domainPrefix: "stockflow",
+          http: {
+            method: "GET",
+            path: "/challans/challan-1/pdf",
+            protocol: "HTTP/1.1",
+            sourceIp: "127.0.0.1",
+            userAgent: "vitest"
+          },
+          requestId: "request-1",
+          routeKey: "$default",
+          stage: "$default",
+          time: "11/Aug/2026:05:07:00 +0000",
+          timeEpoch: 1786424820000
+        },
+        isBase64Encoded: false
+      },
+      {
+        callbackWaitsForEmptyEventLoop: false,
+        functionName: "stockflow-test",
+        functionVersion: "$LATEST",
+        invokedFunctionArn: "arn:aws:lambda:ap-south-1:123456789012:function:stockflow-test",
+        memoryLimitInMB: "1024",
+        awsRequestId: "request-1",
+        logGroupName: "test",
+        logStreamName: "test",
+        getRemainingTimeInMillis: () => 30000,
+        done: () => undefined,
+        fail: () => undefined,
+        succeed: () => undefined
+      },
+      () => undefined
+    )) as { statusCode: number; headers: Record<string, string>; body: string; isBase64Encoded: boolean };
+
+    expect(result.statusCode).toBe(200);
+    expect(result.headers["content-type"]).toContain("application/pdf");
+    expect(result.isBase64Encoded).toBe(true);
+
+    const pdf = Buffer.from(result.body, "base64");
+    expect(pdf.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+    expect(pdf.subarray(-20).toString("ascii")).toContain("%%EOF");
+    expect(pdf.length).toBeGreaterThan(1000);
   });
 });
